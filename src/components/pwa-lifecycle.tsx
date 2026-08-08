@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export function PwaLifecycle() {
   const [waitingWorker, setWaitingWorker] = useState<ServiceWorker | null>(
     null,
   );
+  const isRefreshing = useRef(false);
 
   useEffect(() => {
     if ("storage" in navigator && "persist" in navigator.storage)
@@ -13,6 +14,11 @@ export function PwaLifecycle() {
     if (!("serviceWorker" in navigator)) return;
 
     let registration: ServiceWorkerRegistration | undefined;
+    const handleControllerChange = () => {
+      if (isRefreshing.current) return;
+      isRefreshing.current = true;
+      window.location.reload();
+    };
     const detectWaitingWorker = () => {
       if (registration?.waiting) setWaitingWorker(registration.waiting);
     };
@@ -28,9 +34,18 @@ export function PwaLifecycle() {
       registration.addEventListener("updatefound", handleUpdateFound);
       void registration.update();
     });
+    navigator.serviceWorker.addEventListener(
+      "controllerchange",
+      handleControllerChange,
+    );
 
-    return () =>
+    return () => {
       registration?.removeEventListener("updatefound", handleUpdateFound);
+      navigator.serviceWorker.removeEventListener(
+        "controllerchange",
+        handleControllerChange,
+      );
+    };
   }, []);
 
   if (!waitingWorker) return null;
