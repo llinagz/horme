@@ -217,6 +217,37 @@ export const trainingSessionRepository = {
     if (updated === 0) throw new Error("La sesión ya no existe");
   },
 
+  async remove(trainingSessionId: string): Promise<void> {
+    await initializeDatabase();
+    const session = await database.trainingSessions.get(trainingSessionId);
+    if (!session) throw new Error("La sesión ya no existe");
+    await database.transaction("rw", sessionTables, async () => {
+      const blocks = await database.trainingBlocks
+        .where("trainingSessionId")
+        .equals(trainingSessionId)
+        .toArray();
+      for (const block of blocks) {
+        const movements = await database.exerciseMovements
+          .where("trainingBlockId")
+          .equals(block.trainingBlockId)
+          .toArray();
+        for (const movement of movements) {
+          await database.setRecords
+            .where("exerciseMovementId")
+            .equals(movement.exerciseMovementId)
+            .delete();
+        }
+        await database.exerciseMovements.bulkDelete(
+          movements.map((movement) => movement.exerciseMovementId),
+        );
+      }
+      await database.trainingBlocks.bulkDelete(
+        blocks.map((block) => block.trainingBlockId),
+      );
+      await database.trainingSessions.delete(trainingSessionId);
+    });
+  },
+
   async addBlock(
     trainingSessionId: string,
     type: TrainingBlockType,

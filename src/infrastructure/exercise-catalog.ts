@@ -279,7 +279,7 @@ const catalogEntries: CatalogEntry[] = [
   {
     name: "Thruster",
     englishAlias: "Thruster",
-    category: "material-funcional",
+    category: "fuerza-halterofilia",
     metrics: repetitionsAndWeight,
   },
   {

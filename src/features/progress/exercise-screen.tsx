@@ -3,7 +3,11 @@
 import dynamic from "next/dynamic";
 import { useSearchParams } from "next/navigation";
 import { useLiveQuery } from "dexie-react-hooks";
-import { describeSet, getExerciseProgressPoints } from "@/application/progress";
+import {
+  describeSet,
+  getExerciseProgressPoints,
+  getRecordedSets,
+} from "@/application/progress";
 import { summarizeExercisePerformance } from "@/domain/calculations";
 import { formatLocalDate } from "@/domain/dates";
 import { exerciseDefinitionRepository } from "@/infrastructure/repositories/exercise-definition-repository";
@@ -38,17 +42,15 @@ export function ExerciseScreen() {
     [exerciseDefinitionId],
     [],
   );
-  const summary = summarizeExercisePerformance(
-    history.flatMap((entry) => entry.sets),
-  );
+  const recordedSets = getRecordedSets(history);
+  const summary = summarizeExercisePerformance(recordedSets);
   const bestSets = history
     .flatMap((entry) =>
-      entry.sets.map((setRecord) => ({
+      getRecordedSets([entry]).map((setRecord) => ({
         date: entry.session.sessionDate,
         setRecord,
       })),
     )
-    .filter((item) => item.setRecord.isCompleted)
     .toSorted(
       (left, right) =>
         (right.setRecord.weightKilograms ?? 0) -

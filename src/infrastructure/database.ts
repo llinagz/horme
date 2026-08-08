@@ -43,6 +43,23 @@ export class HormeDatabase extends Dexie {
       trainingBlocks:
         "trainingBlockId, trainingSessionId, type, [trainingSessionId+position]",
     });
+    this.version(4)
+      .stores({
+        exerciseDefinitions: "exerciseDefinitionId, name, category, origin",
+      })
+      .upgrade(async (transaction) => {
+        const thruster = await transaction
+          .table<ExerciseDefinition, string>("exerciseDefinitions")
+          .get("built-in-044");
+        if (thruster?.origin === "built-in") {
+          await transaction
+            .table("exerciseDefinitions")
+            .update("built-in-044", {
+              category: "fuerza-halterofilia",
+              updatedAt: new Date().toISOString(),
+            });
+        }
+      });
   }
 }
 

@@ -6,6 +6,8 @@ import {
   summarizeExercisePerformance,
 } from "./calculations";
 import type { BodyMeasurement, SetRecord } from "./entities";
+import { getRecordedSets } from "@/application/progress";
+import type { ExerciseHistoryEntry } from "@/infrastructure/repositories/training-session-repository";
 
 const timestamp = "2026-08-08T10:00:00.000Z";
 
@@ -26,6 +28,50 @@ describe("cálculos de progreso", () => {
     expect(calculateEstimatedOneRepMax(1, 115)).toBe(115);
     expect(calculateEstimatedOneRepMax(5, 100)).toBeCloseTo(116.67, 2);
     expect(calculateEstimatedOneRepMax(11, 100)).toBeUndefined();
+  });
+
+  it("cuenta las series con datos de una sesión finalizada aunque no se hayan marcado una a una", () => {
+    const setRecord = createSet({
+      repetitions: 3,
+      weightKilograms: 50,
+      isCompleted: false,
+    });
+    const history = [
+      {
+        session: {
+          trainingSessionId: crypto.randomUUID(),
+          sessionDate: "2026-08-08",
+          status: "completed" as const,
+          createdAt: timestamp,
+          updatedAt: timestamp,
+        },
+        block: {
+          trainingBlockId: crypto.randomUUID(),
+          trainingSessionId: crypto.randomUUID(),
+          type: "strength" as const,
+          title: "Fuerza",
+          position: 0,
+          createdAt: timestamp,
+          updatedAt: timestamp,
+        },
+        movement: {
+          exerciseMovementId: setRecord.exerciseMovementId,
+          trainingBlockId: crypto.randomUUID(),
+          exerciseDefinitionId: "thruster",
+          position: 0,
+          createdAt: timestamp,
+          updatedAt: timestamp,
+        },
+        sets: [setRecord],
+      },
+    ] satisfies ExerciseHistoryEntry[];
+
+    expect(
+      summarizeExercisePerformance(getRecordedSets(history)),
+    ).toMatchObject({
+      maximumActualWeightKilograms: 50,
+      totalVolumeKilograms: 150,
+    });
   });
 
   it("excluye del volumen las series incompletas o sin carga", () => {

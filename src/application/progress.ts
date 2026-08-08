@@ -4,7 +4,10 @@ import {
   summarizeExercisePerformance,
 } from "@/domain/calculations";
 import type { ExerciseDefinition, SetRecord } from "@/domain/entities";
-import { trainingSessionRepository } from "@/infrastructure/repositories/training-session-repository";
+import {
+  trainingSessionRepository,
+  type ExerciseHistoryEntry,
+} from "@/infrastructure/repositories/training-session-repository";
 
 export interface ExerciseProgressSummary {
   exercise: ExerciseDefinition;
@@ -13,6 +16,27 @@ export interface ExerciseProgressSummary {
   totalVolumeKilograms: number;
   completedSetCount: number;
   latestSessionDate: string;
+}
+
+function hasRecordedMetric(setRecord: SetRecord): boolean {
+  return (
+    setRecord.repetitions !== undefined ||
+    setRecord.weightKilograms !== undefined ||
+    setRecord.durationSeconds !== undefined ||
+    setRecord.distanceMeters !== undefined ||
+    setRecord.calories !== undefined
+  );
+}
+
+export function getRecordedSets(history: ExerciseHistoryEntry[]): SetRecord[] {
+  return history.flatMap(({ session, sets }) =>
+    sets.flatMap((setRecord) => {
+      const isRecorded =
+        setRecord.isCompleted ||
+        (session.status === "completed" && hasRecordedMetric(setRecord));
+      return isRecorded ? [{ ...setRecord, isCompleted: true }] : [];
+    }),
+  );
 }
 
 export async function listExerciseProgress(): Promise<
@@ -25,7 +49,7 @@ export async function listExerciseProgress(): Promise<
       const history = await trainingSessionRepository.listExerciseHistory(
         exercise.exerciseDefinitionId,
       );
-      const sets = history.flatMap((entry) => entry.sets);
+      const sets = getRecordedSets(history);
       return {
         exercise,
         ...summarizeExercisePerformance(sets),
@@ -52,9 +76,7 @@ export async function getExerciseProgressPoints(
     await trainingSessionRepository.listExerciseHistory(exerciseDefinitionId);
   return history
     .map((entry) => {
-      const completedSets = entry.sets.filter(
-        (setRecord) => setRecord.isCompleted,
-      );
+      const completedSets = getRecordedSets([entry]);
       let estimatedOneRepMaxKilograms: number | undefined;
       let maximumWeightKilograms: number | undefined;
       for (const setRecord of completedSets) {

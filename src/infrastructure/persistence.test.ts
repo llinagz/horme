@@ -199,6 +199,30 @@ describe("persistencia transaccional", () => {
     });
   });
 
+  it("elimina una sesión con sus bloques, ejercicios y series", async () => {
+    const exercise = await addTestExercise();
+    const sessionId = await trainingSessionRepository.create("2026-08-08");
+    const blockId = await trainingSessionRepository.addBlock(
+      sessionId,
+      "strength",
+    );
+    const movementId = await trainingSessionRepository.addMovement(
+      blockId,
+      exercise.exerciseDefinitionId,
+    );
+    await trainingSessionRepository.addRepeatedSets(movementId, 1, {
+      repetitions: 5,
+      weightKilograms: 50,
+    });
+
+    await trainingSessionRepository.remove(sessionId);
+
+    expect(await database.trainingSessions.count()).toBe(0);
+    expect(await database.trainingBlocks.count()).toBe(0);
+    expect(await database.exerciseMovements.count()).toBe(0);
+    expect(await database.setRecords.count()).toBe(0);
+  });
+
   it("elimina una serie y reordena las restantes", async () => {
     const exercise = await addTestExercise();
     const sessionId = await trainingSessionRepository.create("2026-08-08");

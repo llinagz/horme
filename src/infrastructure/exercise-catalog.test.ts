@@ -11,6 +11,13 @@ describe("catálogo incorporado", () => {
     expect(exercises.some((exercise) => exercise.name === "Peso muerto")).toBe(
       true,
     );
+    expect(exercises).toContainEqual(
+      expect.objectContaining({
+        exerciseDefinitionId: "built-in-044",
+        name: "Thruster",
+        category: "fuerza-halterofilia",
+      }),
+    );
     expect(exercises.every((exercise) => exercise.metrics.length > 0)).toBe(
       true,
     );

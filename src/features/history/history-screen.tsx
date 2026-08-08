@@ -15,6 +15,11 @@ export function HistoryScreen() {
       await trainingSessionRepository.duplicateSession(trainingSessionId);
     router.push(`/session?trainingSessionId=${duplicateId}`);
   };
+  const handleRemove = async (trainingSessionId: string) => {
+    if (!window.confirm("¿Eliminar este entrenamiento y todos sus datos?"))
+      return;
+    await trainingSessionRepository.remove(trainingSessionId);
+  };
   return (
     <div className="stack-large">
       <PageHeading
@@ -62,6 +67,13 @@ export function HistoryScreen() {
                 onClick={() => handleDuplicate(session.trainingSessionId)}
               >
                 ⧉ Duplicar sesión
+              </button>
+              <button
+                type="button"
+                className="danger-button full-width"
+                onClick={() => handleRemove(session.trainingSessionId)}
+              >
+                Eliminar entrenamiento
               </button>
             </article>
           ))}
