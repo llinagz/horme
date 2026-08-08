@@ -1,0 +1,31 @@
+# dependencies
+node_modules/
+
+# Next.js
+.next/
+out/
+*.tsbuildinfo
+
+# tests
+playwright-report/
+test-results/
+coverage/
+.playwright-cli/
+
+# Serwist generated files
+public/sw.js
+public/sw.js.map
+public/swe-worker-*.js
+
+# local files
+.DS_Store
+*.log
+
+# local assistant artifacts
+AGENTS.md
+CLAUDE.md
+codex/
+
+# environment files are intentionally unused by Hormé
+.env*
+!.env.example

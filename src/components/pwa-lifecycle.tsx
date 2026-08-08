@@ -1,0 +1,49 @@
+"use client";
+
+import { useEffect, useState } from "react";
+
+export function PwaLifecycle() {
+  const [waitingWorker, setWaitingWorker] = useState<ServiceWorker | null>(
+    null,
+  );
+
+  useEffect(() => {
+    if ("storage" in navigator && "persist" in navigator.storage)
+      void navigator.storage.persist();
+    if (!("serviceWorker" in navigator)) return;
+
+    let registration: ServiceWorkerRegistration | undefined;
+    const detectWaitingWorker = () => {
+      if (registration?.waiting) setWaitingWorker(registration.waiting);
+    };
+    const handleUpdateFound = () => {
+      const installing = registration?.installing;
+      if (!installing) return;
+      installing.addEventListener("statechange", detectWaitingWorker);
+    };
+
+    void navigator.serviceWorker.ready.then((readyRegistration) => {
+      registration = readyRegistration;
+      detectWaitingWorker();
+      registration.addEventListener("updatefound", handleUpdateFound);
+      void registration.update();
+    });
+
+    return () =>
+      registration?.removeEventListener("updatefound", handleUpdateFound);
+  }, []);
+
+  if (!waitingWorker) return null;
+  return (
+    <aside className="update-banner" role="status">
+      <span>Hay una versión nueva preparada.</span>
+      <button
+        type="button"
+        className="text-button"
+        onClick={() => waitingWorker.postMessage({ type: "SKIP_WAITING" })}
+      >
+        Actualizar ahora
+      </button>
+    </aside>
+  );
+}
