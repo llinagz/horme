@@ -91,6 +91,16 @@ function SetEditor({
             </label>
           ))}
       </div>
+      <button
+        type="button"
+        className="icon-button danger set-remove-button"
+        aria-label={`Eliminar serie ${setRecord.position + 1}`}
+        onClick={() =>
+          void trainingSessionRepository.removeSet(setRecord.setRecordId)
+        }
+      >
+        ×
+      </button>
     </div>
   );
 }

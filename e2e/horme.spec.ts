@@ -27,6 +27,11 @@ test("onboarding, entrenamiento, medición, progreso, offline y copia", async ({
   await page.getByLabel("Carga por serie").fill("115");
   await page.getByRole("button", { name: "Crear iguales" }).click();
   await expect(page.locator(".set-row")).toHaveCount(3);
+  await page.getByRole("button", { name: "Eliminar serie 2" }).click();
+  await expect(page.locator(".set-row")).toHaveCount(2);
+  await expect(
+    page.getByRole("button", { name: "Eliminar serie 2" }),
+  ).toBeVisible();
   for (const checkbox of await page.locator(".set-checkbox input").all()) {
     await checkbox.check();
   }

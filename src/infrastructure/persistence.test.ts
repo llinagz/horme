@@ -168,6 +168,35 @@ describe("persistencia transaccional", () => {
       position: 0,
     });
   });
+
+  it("elimina una serie y reordena las restantes", async () => {
+    const exercise = await addTestExercise();
+    const sessionId = await trainingSessionRepository.create("2026-08-08");
+    const blockId = await trainingSessionRepository.addBlock(
+      sessionId,
+      "strength",
+    );
+    const movementId = await trainingSessionRepository.addMovement(
+      blockId,
+      exercise.exerciseDefinitionId,
+    );
+    await trainingSessionRepository.addRepeatedSets(movementId, 3, {
+      repetitions: 5,
+    });
+    const sets = await database.setRecords
+      .where("exerciseMovementId")
+      .equals(movementId)
+      .sortBy("position");
+
+    await trainingSessionRepository.removeSet(sets[1]!.setRecordId);
+
+    expect(
+      await database.setRecords
+        .where("exerciseMovementId")
+        .equals(movementId)
+        .sortBy("position"),
+    ).toMatchObject([{ position: 0 }, { position: 1 }]);
+  });
 });
 
 describe("copias", () => {

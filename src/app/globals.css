@@ -966,13 +966,16 @@ select:focus {
 }
 .set-row {
   display: grid;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: auto 1fr auto;
   align-items: end;
   gap: 0.55rem;
   padding: 0.6rem;
   border: 1px solid #e3ded1;
   border-radius: 0.65rem;
   background: #f9f7f1;
+}
+.set-remove-button {
+  align-self: center;
 }
 .set-row.completed {
   border-color: #b8c5ac;
