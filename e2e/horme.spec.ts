@@ -114,4 +114,10 @@ test("onboarding, entrenamiento, medición, progreso, offline y copia", async ({
   await expect(
     page.getByRole("heading", { name: "Hola, Javier" }),
   ).toBeVisible();
+
+  await page.getByRole("link", { name: "Historial" }).click();
+  await expect(page.getByRole("heading", { name: "Historial" })).toBeVisible();
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.getByRole("button", { name: "Eliminar entrenamiento" }).click();
+  await expect(page.getByText("Historial vacío")).toBeVisible();
 });
