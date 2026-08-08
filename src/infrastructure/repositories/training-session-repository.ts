@@ -445,6 +445,33 @@ export const trainingSessionRepository = {
     if (!updated) throw new Error("El ejercicio ya no existe en la sesión");
   },
 
+  async removeMovement(exerciseMovementId: string): Promise<void> {
+    await initializeDatabase();
+    const source = await database.exerciseMovements.get(exerciseMovementId);
+    if (!source) throw new Error("El ejercicio ya no existe en la sesión");
+    const timestamp = new Date().toISOString();
+    await database.transaction("rw", sessionTables, async () => {
+      await database.setRecords
+        .where("exerciseMovementId")
+        .equals(exerciseMovementId)
+        .delete();
+      await database.exerciseMovements.delete(exerciseMovementId);
+      await database.exerciseMovements
+        .where("trainingBlockId")
+        .equals(source.trainingBlockId)
+        .and((movement) => movement.position > source.position)
+        .modify((movement) => {
+          movement.position -= 1;
+          movement.updatedAt = timestamp;
+        });
+      const block = await database.trainingBlocks.get(source.trainingBlockId);
+      if (!block) throw new Error("El bloque ya no existe");
+      await database.trainingSessions.update(block.trainingSessionId, {
+        updatedAt: timestamp,
+      });
+    });
+  },
+
   async addRepeatedSets(
     exerciseMovementId: string,
     count: number,

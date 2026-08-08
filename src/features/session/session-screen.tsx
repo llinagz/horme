@@ -155,13 +155,28 @@ function MovementEditor({
           <h4>{exercise.name}</h4>
           <small>{exercise.englishAlias}</small>
         </div>
-        <Link
-          className="icon-button"
-          aria-label={`Abrir progreso de ${exercise.name}`}
-          href={`/exercise?exerciseDefinitionId=${exercise.exerciseDefinitionId}`}
-        >
-          ↗
-        </Link>
+        <div className="compact-actions">
+          <Link
+            className="icon-button"
+            aria-label={`Abrir progreso de ${exercise.name}`}
+            href={`/exercise?exerciseDefinitionId=${exercise.exerciseDefinitionId}`}
+          >
+            ↗
+          </Link>
+          <button
+            type="button"
+            className="icon-button danger"
+            aria-label={`Eliminar ${exercise.name}`}
+            onClick={() => {
+              if (window.confirm(`¿Eliminar ${exercise.name} y sus series?`))
+                void trainingSessionRepository.removeMovement(
+                  movement.exerciseMovementId,
+                );
+            }}
+          >
+            ×
+          </button>
+        </div>
       </header>
       <label className="field compact-field">
         <span>Prescripción</span>
