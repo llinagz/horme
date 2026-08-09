@@ -3,14 +3,15 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, type ReactNode } from "react";
+import { ChartNoAxesCombined, History, House, Settings } from "lucide-react";
 import { useAthleteProfile } from "./data-hooks";
 import { PwaLifecycle } from "./pwa-lifecycle";
 
 const navigationItems = [
-  { href: "/", label: "Inicio", icon: "⌂" },
-  { href: "/history", label: "Historial", icon: "◷" },
-  { href: "/progress", label: "Progreso", icon: "↗" },
-  { href: "/settings", label: "Ajustes", icon: "⚙" },
+  { href: "/", label: "Inicio", icon: House },
+  { href: "/history", label: "Historial", icon: History },
+  { href: "/progress", label: "Progreso", icon: ChartNoAxesCombined },
+  { href: "/settings", label: "Ajustes", icon: Settings },
 ] as const;
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -54,6 +55,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <main className="page-content">{children}</main>
       <nav className="bottom-navigation" aria-label="Navegación principal">
         {navigationItems.map((item) => {
+          const Icon = item.icon;
           const isActive =
             item.href === "/"
               ? pathname === "/"
@@ -68,7 +70,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               aria-current={isActive ? "page" : undefined}
             >
               <span className="navigation-icon" aria-hidden="true">
-                {item.icon}
+                <Icon size={21} strokeWidth={1.8} />
               </span>
               <span>{item.label}</span>
             </Link>

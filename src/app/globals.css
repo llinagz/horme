@@ -295,9 +295,10 @@ small {
   color: var(--olive-dark);
 }
 .navigation-icon {
-  font-family: Georgia, serif;
-  font-size: 1.4rem;
   line-height: 1;
+}
+.navigation-icon svg {
+  display: block;
 }
 .navigation-item.active .navigation-icon {
   transform: translateY(-1px);
