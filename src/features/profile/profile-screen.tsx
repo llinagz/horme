@@ -178,7 +178,7 @@ export function ProfileScreen() {
 
       <div className="summary-grid">
         <article className="stat-card">
-          <span className="stat-label">Altura actual</span>
+          <span className="stat-label">Altura</span>
           <strong>
             {currentValues.heightCentimeters ?? "—"}
             <small> cm</small>

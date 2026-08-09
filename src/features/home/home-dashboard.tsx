@@ -78,7 +78,7 @@ export function HomeDashboard() {
         />
         <div className="summary-grid">
           <article className="stat-card">
-            <span className="stat-label">Altura actual</span>
+            <span className="stat-label">Altura</span>
             <strong>
               {currentBodyValues.heightCentimeters ?? "—"}
               <small>{currentBodyValues.heightCentimeters ? " cm" : ""}</small>
