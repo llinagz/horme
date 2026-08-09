@@ -45,9 +45,10 @@ function downloadJson(
 
 export function SettingsScreen() {
   const router = useRouter();
+  const [backupStatusRefreshKey, setBackupStatusRefreshKey] = useState(0);
   const backupStatus = useLiveQuery(
     () => getBackupStatus(),
-    [],
+    [backupStatusRefreshKey],
     defaultBackupStatus,
   );
   const customExercises = useLiveQuery(
@@ -87,6 +88,7 @@ export function SettingsScreen() {
       const backup = await createBackup();
       downloadJson(backup);
       await markBackupCreated(backup.exportedAt);
+      setBackupStatusRefreshKey((current) => current + 1);
       setMessage({
         text: "Copia descargada. Guárdala en una ubicación personal segura.",
         tone: "success",
