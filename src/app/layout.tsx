@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import { DatabaseProvider } from "@/components/database-provider";
+import { PwaLifecycle } from "@/components/pwa-lifecycle";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -28,6 +29,7 @@ export default function RootLayout({
     <html lang="es">
       <body>
         <DatabaseProvider>{children}</DatabaseProvider>
+        <PwaLifecycle />
       </body>
     </html>
   );

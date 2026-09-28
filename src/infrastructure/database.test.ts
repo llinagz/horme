@@ -1,7 +1,33 @@
 import Dexie from "dexie";
 import { describe, expect, it } from "vitest";
 import { createBuiltInExercises } from "./exercise-catalog";
-import { HormeDatabase } from "./database";
+import {
+  database,
+  HormeDatabase,
+  initializeDatabase,
+  seedBuiltInExercises,
+} from "./database";
+
+describe("inicialización", () => {
+  it("es idempotente y repone los integrados que falten", async () => {
+    await initializeDatabase();
+    const total = await database.exerciseDefinitions.count();
+    await database.exerciseDefinitions.delete("built-in-001");
+    await database.exerciseDefinitions.update("built-in-002", {
+      isArchived: true,
+    });
+
+    await seedBuiltInExercises();
+
+    expect(await database.exerciseDefinitions.count()).toBe(total);
+    expect(
+      await database.exerciseDefinitions.get("built-in-001"),
+    ).toBeDefined();
+    expect(
+      (await database.exerciseDefinitions.get("built-in-002"))?.isArchived,
+    ).toBe(true);
+  });
+});
 
 describe("migraciones", () => {
   it("v4 recategoriza el thruster integrado de una base v3", async () => {

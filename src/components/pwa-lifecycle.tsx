@@ -7,6 +7,7 @@ export function PwaLifecycle() {
     null,
   );
   const isRefreshing = useRef(false);
+  const isUpdateRequested = useRef(false);
 
   useEffect(() => {
     if ("storage" in navigator && "persist" in navigator.storage)
@@ -14,8 +15,10 @@ export function PwaLifecycle() {
     if (!("serviceWorker" in navigator)) return;
 
     let registration: ServiceWorkerRegistration | undefined;
+    // El primer service worker también toma el control (`clientsClaim`); solo
+    // se recarga cuando lo ha pedido el usuario, para no perder lo escrito.
     const handleControllerChange = () => {
-      if (isRefreshing.current) return;
+      if (!isUpdateRequested.current || isRefreshing.current) return;
       isRefreshing.current = true;
       window.location.reload();
     };
@@ -55,7 +58,10 @@ export function PwaLifecycle() {
       <button
         type="button"
         className="text-button"
-        onClick={() => waitingWorker.postMessage({ type: "SKIP_WAITING" })}
+        onClick={() => {
+          isUpdateRequested.current = true;
+          waitingWorker.postMessage({ type: "SKIP_WAITING" });
+        }}
       >
         Actualizar ahora
       </button>

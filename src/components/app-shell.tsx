@@ -5,7 +5,6 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, type ReactNode } from "react";
 import { ChartNoAxesCombined, History, House, Settings } from "lucide-react";
 import { useAthleteProfile } from "./data-hooks";
-import { PwaLifecycle } from "./pwa-lifecycle";
 
 const navigationItems = [
   { href: "/", label: "Inicio", icon: House },
@@ -36,7 +35,6 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="app-frame">
-      <PwaLifecycle />
       <header className="topbar">
         <Link href="/" className="wordmark" aria-label="Hormé, inicio">
           <span className="brand-mark brand-mark-small">Η</span> HORMÉ
