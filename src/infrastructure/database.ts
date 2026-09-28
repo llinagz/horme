@@ -67,19 +67,29 @@ export const database = new HormeDatabase();
 
 let initializationPromise: Promise<void> | undefined;
 
+/** Añade los ejercicios integrados que falten sin tocar los existentes. */
+export async function seedBuiltInExercises(): Promise<void> {
+  const builtIns = createBuiltInExercises(new Date().toISOString());
+  await database.transaction("rw", database.exerciseDefinitions, async () => {
+    const existing = await database.exerciseDefinitions.bulkGet(
+      builtIns.map((exercise) => exercise.exerciseDefinitionId),
+    );
+    const missing = builtIns.filter((_, index) => !existing[index]);
+    if (missing.length > 0) await database.exerciseDefinitions.bulkAdd(missing);
+  });
+}
+
+/**
+ * Abre la base una sola vez y siembra el catálogo. Si falla, el siguiente
+ * intento vuelve a probar en lugar de reutilizar el error.
+ */
 export function initializeDatabase(): Promise<void> {
   initializationPromise ??= (async () => {
     await database.open();
-    if (
-      (await database.exerciseDefinitions
-        .where("origin")
-        .equals("built-in")
-        .count()) === 0
-    ) {
-      await database.exerciseDefinitions.bulkAdd(
-        createBuiltInExercises(new Date().toISOString()),
-      );
-    }
-  })();
+    await seedBuiltInExercises();
+  })().catch((error: unknown) => {
+    initializationPromise = undefined;
+    throw error;
+  });
   return initializationPromise;
 }

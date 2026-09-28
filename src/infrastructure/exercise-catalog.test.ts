@@ -22,4 +22,16 @@ describe("catálogo incorporado", () => {
       true,
     );
   });
+
+  it("no cambia el identificador de ningún ejercicio existente", () => {
+    // Los IDs se derivan de la posición en el catálogo y ya están guardados
+    // en los dispositivos: los ejercicios nuevos se añaden siempre al final.
+    const identifiers = Object.fromEntries(
+      createBuiltInExercises("2026-08-08T10:00:00.000Z").map((exercise) => [
+        exercise.exerciseDefinitionId,
+        exercise.englishAlias,
+      ]),
+    );
+    expect(identifiers).toMatchSnapshot();
+  });
 });

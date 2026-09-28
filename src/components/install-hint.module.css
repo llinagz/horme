@@ -1,0 +1,29 @@
+.hint {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-2) var(--space-3) var(--space-4);
+  border: 1px solid var(--veta);
+  border-radius: var(--radius-l);
+  background: var(--marmol-alto);
+}
+
+.text {
+  display: grid;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+  font-size: var(--text-sm);
+}
+
+.text strong {
+  font-weight: 600;
+}
+
+.text span {
+  color: var(--tinta-suave);
+}
+
+.text svg {
+  vertical-align: -3px;
+}

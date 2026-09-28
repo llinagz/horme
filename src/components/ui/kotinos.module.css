@@ -1,0 +1,95 @@
+.kotinos {
+  --leaf: var(--olivo);
+  --leaf-empty: var(--veta-fuerte);
+  --count: var(--tinta);
+  --count-muted: var(--tinta-suave);
+  position: relative;
+  width: 112px;
+  height: 112px;
+  flex: none;
+}
+
+.inverse {
+  --leaf: var(--sobre-olivo);
+  --leaf-empty: color-mix(in srgb, var(--sobre-olivo) 45%, transparent);
+  --count: var(--sobre-olivo);
+  --count-muted: color-mix(in srgb, var(--sobre-olivo) 80%, transparent);
+}
+
+.small {
+  width: 76px;
+  height: 76px;
+}
+
+.kotinos svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.stem {
+  fill: none;
+  stroke: var(--leaf-empty);
+  stroke-width: 1;
+}
+
+.leafOn,
+.leafOff {
+  stroke-width: 1.2;
+  transform-box: fill-box;
+  transform-origin: center;
+  transition:
+    fill var(--duration) ease,
+    stroke var(--duration) ease;
+}
+
+.leafOn {
+  fill: var(--leaf);
+  stroke: var(--leaf);
+  animation: sprout 420ms var(--ease-out);
+}
+
+.leafOff {
+  fill: transparent;
+  stroke: var(--leaf-empty);
+}
+
+.count {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  text-align: center;
+  line-height: 1;
+  color: var(--count);
+}
+
+.count b {
+  font-size: 1.75rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.count span {
+  margin-top: 3px;
+  font-size: var(--text-xs);
+  color: var(--count-muted);
+}
+
+.small .count b {
+  font-size: 1.25rem;
+}
+
+.small .count span {
+  font-size: 0.6875rem;
+}
+
+@keyframes sprout {
+  0% {
+    transform: scale(0.4);
+  }
+  60% {
+    transform: scale(1.2);
+  }
+}

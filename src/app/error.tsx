@@ -8,16 +8,18 @@ export default function ErrorPage({
   reset: () => void;
 }) {
   return (
-    <main className="centered-state">
-      <div className="brand-mark">Η</div>
-      <h1>Algo no ha salido bien</h1>
-      <p>Tus datos anteriores siguen guardados en este dispositivo.</p>
-      <details className="error-details">
+    <main className="loading">
+      <span className="brand-mark large" aria-hidden="true">
+        Η
+      </span>
+      <h1 className="title-md">Esta pantalla ha fallado</h1>
+      <p>Tus datos siguen guardados en este móvil.</p>
+      <details className="muted small">
         <summary>Detalle técnico</summary>
         <code>{error.message}</code>
       </details>
-      <button type="button" className="primary-button" onClick={reset}>
-        Intentarlo de nuevo
+      <button type="button" className="button primary large" onClick={reset}>
+        Volver a intentarlo
       </button>
     </main>
   );

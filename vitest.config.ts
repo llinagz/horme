@@ -4,9 +4,30 @@ import path from "node:path";
 export default defineConfig({
   resolve: { alias: { "@": path.resolve(import.meta.dirname, "src") } },
   test: {
-    environment: "node",
     setupFiles: ["./src/test/setup.ts"],
-    include: ["src/**/*.test.ts"],
-    coverage: { reporter: ["text", "html"] },
+    projects: [
+      {
+        extends: true,
+        test: {
+          name: "unit",
+          environment: "node",
+          include: ["src/**/*.test.ts"],
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: "components",
+          environment: "happy-dom",
+          include: ["src/**/*.test.tsx"],
+        },
+      },
+    ],
+    coverage: {
+      provider: "v8",
+      reporter: ["text", "html"],
+      include: ["src/domain/**", "src/application/**", "src/infrastructure/**"],
+      exclude: ["**/*.test.*", "src/infrastructure/exercise-catalog.ts"],
+    },
   },
 });

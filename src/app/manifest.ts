@@ -5,30 +5,57 @@ export const dynamic = "force-static";
 export default function manifest(): MetadataRoute.Manifest {
   return {
     id: "/",
-    name: "Hormé · Entrenamiento CrossFit",
+    name: "Hormé, diario de CrossFit",
     short_name: "Hormé",
     description:
-      "Registro personal, privado y local de entrenamiento CrossFit.",
+      "Registra series, WOD y progreso. Privado: todo se guarda en tu móvil.",
     start_url: "/",
     scope: "/",
     display: "standalone",
+    display_override: ["standalone"],
     orientation: "portrait-primary",
-    background_color: "#f5f2e9",
-    theme_color: "#526246",
+    background_color: "#f1f2ee",
+    theme_color: "#f1f2ee",
     lang: "es",
+    dir: "ltr",
     categories: ["fitness", "health", "sports"],
     icons: [
+      {
+        src: "/icons/icon-192.png",
+        sizes: "192x192",
+        type: "image/png",
+        purpose: "any",
+      },
+      {
+        src: "/icons/icon-512.png",
+        sizes: "512x512",
+        type: "image/png",
+        purpose: "any",
+      },
+      {
+        src: "/icons/icon-maskable-512.png",
+        sizes: "512x512",
+        type: "image/png",
+        purpose: "maskable",
+      },
       {
         src: "/icons/icon.svg",
         sizes: "any",
         type: "image/svg+xml",
         purpose: "any",
       },
+    ],
+    shortcuts: [
       {
-        src: "/icons/icon-maskable.svg",
-        sizes: "any",
-        type: "image/svg+xml",
-        purpose: "maskable",
+        name: "Empezar sesión",
+        short_name: "Sesión",
+        url: "/session/",
+        icons: [{ src: "/icons/icon-192.png", sizes: "192x192" }],
+      },
+      {
+        name: "Historial",
+        url: "/history/",
+        icons: [{ src: "/icons/icon-192.png", sizes: "192x192" }],
       },
     ],
   };

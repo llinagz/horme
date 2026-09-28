@@ -9,132 +9,21 @@ import type {
   TrainingBlock,
   TrainingSession,
 } from "@/domain/entities";
+import {
+  athleteProfileSchema,
+  bodyMeasurementSchema,
+  exerciseDefinitionSchema,
+  exerciseMovementSchema,
+  setRecordSchema,
+  trainingBlockSchema,
+  trainingSessionSchema,
+} from "@/domain/schemas";
 import { database, initializeDatabase } from "./database";
-
-const timestampSchema = z.iso.datetime();
-const localDateSchema = z.iso.date();
-
-const athleteProfileSchema = z.strictObject({
-  athleteProfileId: z.uuid(),
-  displayName: z.string().trim().min(1).max(50),
-  onboardingCompletedAt: timestampSchema,
-  createdAt: timestampSchema,
-  updatedAt: timestampSchema,
-});
-
-const bodyMeasurementSchema = z
-  .strictObject({
-    bodyMeasurementId: z.uuid(),
-    measurementDate: localDateSchema,
-    heightCentimeters: z.number().min(100).max(250).optional(),
-    weightKilograms: z.number().min(30).max(350).optional(),
-    createdAt: timestampSchema,
-    updatedAt: timestampSchema,
-  })
-  .refine(
-    (measurement) =>
-      measurement.heightCentimeters !== undefined ||
-      measurement.weightKilograms !== undefined,
-  );
-
-const exerciseDefinitionSchema = z.strictObject({
-  exerciseDefinitionId: z.string().min(1),
-  name: z.string().min(1),
-  englishAlias: z.string(),
-  category: z.enum([
-    "fuerza-halterofilia",
-    "gimnasia",
-    "peso-corporal",
-    "monoestructural",
-    "material-funcional",
-  ]),
-  metrics: z
-    .array(
-      z.enum([
-        "repetitions",
-        "weightKilograms",
-        "durationSeconds",
-        "distanceMeters",
-        "calories",
-      ]),
-    )
-    .min(1),
-  origin: z.enum(["built-in", "custom"]),
-  isArchived: z.boolean(),
-  createdAt: timestampSchema,
-  updatedAt: timestampSchema,
-});
-
-const trainingSessionSchema = z.strictObject({
-  trainingSessionId: z.uuid(),
-  sessionDate: localDateSchema,
-  status: z.enum(["draft", "completed"]),
-  perceivedExertion: z.number().int().min(1).max(10).optional(),
-  painLevel: z.number().int().min(0).max(10).optional(),
-  feelings: z.string().optional(),
-  createdAt: timestampSchema,
-  updatedAt: timestampSchema,
-  completedAt: timestampSchema.optional(),
-});
-
-const wodConfigurationSchema = z.strictObject({
-  name: z.string().optional(),
-  format: z.enum(["for-time", "amrap", "emom", "free"]),
-  prescription: z.string().optional(),
-  result: z.string().optional(),
-  scaling: z.enum(["rx", "scaled", "adapted"]),
-  durationSeconds: z.number().nonnegative().optional(),
-  timeCapSeconds: z.number().nonnegative().optional(),
-  isCompleted: z.boolean().optional(),
-  rounds: z.number().int().nonnegative().optional(),
-  additionalRepetitions: z.number().int().nonnegative().optional(),
-  plannedRounds: z.number().int().nonnegative().optional(),
-  completedRounds: z.number().int().nonnegative().optional(),
-  intervalSeconds: z.number().nonnegative().optional(),
-  notes: z.string().optional(),
-});
-
-const trainingBlockSchema = z.strictObject({
-  trainingBlockId: z.uuid(),
-  trainingSessionId: z.uuid(),
-  type: z.enum(["strength", "technique", "accessory", "wod", "free"]),
-  title: z.string(),
-  position: z.number().int().nonnegative(),
-  notes: z.string().optional(),
-  wodConfiguration: wodConfigurationSchema.optional(),
-  createdAt: timestampSchema,
-  updatedAt: timestampSchema,
-});
-
-const exerciseMovementSchema = z.strictObject({
-  exerciseMovementId: z.uuid(),
-  trainingBlockId: z.uuid(),
-  exerciseDefinitionId: z.string().min(1),
-  position: z.number().int().nonnegative(),
-  prescription: z.string().optional(),
-  notes: z.string().optional(),
-  createdAt: timestampSchema,
-  updatedAt: timestampSchema,
-});
-
-const setRecordSchema = z.strictObject({
-  setRecordId: z.uuid(),
-  exerciseMovementId: z.uuid(),
-  position: z.number().int().nonnegative(),
-  repetitions: z.number().int().nonnegative().optional(),
-  weightKilograms: z.number().nonnegative().optional(),
-  durationSeconds: z.number().nonnegative().optional(),
-  distanceMeters: z.number().nonnegative().optional(),
-  calories: z.number().nonnegative().optional(),
-  isCompleted: z.boolean(),
-  createdAt: timestampSchema,
-  updatedAt: timestampSchema,
-});
 
 export const backupSchema = z.strictObject({
   format: z.literal("horme-backup"),
   schemaVersion: z.literal(1),
-  exportedAt: timestampSchema,
+  exportedAt: z.iso.datetime(),
   collections: z.strictObject({
     athleteProfiles: z.array(athleteProfileSchema).max(1),
     bodyMeasurements: z.array(bodyMeasurementSchema),
@@ -244,6 +133,8 @@ function validateReferences(backup: HormeBackup): void {
 }
 
 export function parseBackup(value: unknown): HormeBackup {
+  // Con `exactOptionalPropertyTypes` Zod infiere `campo?: T | undefined`; el
+  // esquema estricto garantiza que la forma coincide con las entidades.
   const backup = backupSchema.parse(value) as HormeBackup;
   validateReferences(backup);
   return backup;
@@ -268,9 +159,13 @@ export function previewBackup(value: unknown): BackupPreview {
   };
 }
 
+/**
+ * Exporta todos los datos. Valida la copia antes de devolverla para no
+ * entregar nunca un archivo que después no se pueda restaurar.
+ */
 export async function createBackup(): Promise<HormeBackup> {
   await initializeDatabase();
-  return database.transaction("r", database.tables, async () => ({
+  const backup = await database.transaction("r", database.tables, async () => ({
     format: "horme-backup" as const,
     schemaVersion: 1 as const,
     exportedAt: new Date().toISOString(),
@@ -284,6 +179,8 @@ export async function createBackup(): Promise<HormeBackup> {
       setRecords: await database.setRecords.toArray(),
     },
   }));
+  parseBackup(backup);
+  return backup;
 }
 
 export async function replaceDatabaseFromBackup(value: unknown): Promise<void> {
@@ -318,7 +215,6 @@ export interface BackupStatus {
 }
 
 export async function getBackupStatus(): Promise<BackupStatus> {
-  await initializeDatabase();
   const [lastBackup, countAtBackup, currentSessionCount] = await Promise.all([
     database.applicationMetadata.get("lastBackupAt"),
     database.applicationMetadata.get("sessionCountAtLastBackup"),

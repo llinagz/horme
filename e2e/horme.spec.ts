@@ -1,123 +1,106 @@
 import { expect, test } from "@playwright/test";
+import {
+  completeOnboarding,
+  startStrengthSession,
+  waitForServiceWorkerControl,
+} from "./helpers";
 
 test("onboarding, entrenamiento, medición, progreso, offline y copia", async ({
   page,
   context,
 }) => {
-  await page.goto("/");
-  await expect(page).toHaveURL(/\/onboarding\/?$/);
+  await completeOnboarding(page);
 
-  await page.getByPlaceholder("Tu nombre").fill("Javier");
-  await page.getByRole("button", { name: "Continuar" }).click();
-  await page.getByPlaceholder("175").fill("181");
-  await page.getByPlaceholder("75,5").fill("78,4");
-  await page.getByRole("button", { name: "Entrar en Hormé" }).click();
+  await startStrengthSession(page, "peso muerto", /Peso muerto/);
+  // Sin historial se crean tres series vacías; se ajusta la primera.
   await expect(
-    page.getByRole("heading", { name: "Hola, Javier" }),
-  ).toBeVisible();
+    page.getByRole("button", { name: /^Completar Serie/ }),
+  ).toHaveCount(3);
+  await page.getByLabel("Carga", { exact: true }).fill("115");
+  await page.getByLabel("Carga", { exact: true }).blur();
+  await page.getByRole("button", { name: /Sumar 1 rep/ }).click();
+  await page.getByRole("button", { name: /^Completar Serie 1/ }).click();
 
-  await page.getByRole("button", { name: "Nueva sesión" }).click();
-  await page.getByRole("button", { name: "Fuerza" }).click();
-  await page
-    .getByLabel("Ejercicio a añadir")
-    .selectOption({ label: "Peso muerto · Deadlift" });
-  await page.getByRole("button", { name: "Añadir ejercicio" }).click();
-  await page.getByLabel("Número de series").fill("3");
-  await page.getByLabel("Repeticiones por serie").fill("1");
-  await page.getByLabel("Carga por serie").fill("115");
-  await page.getByRole("button", { name: "Crear iguales" }).click();
-  await expect(page.locator(".set-row")).toHaveCount(3);
+  // Borrar una serie se puede deshacer.
   await page.getByRole("button", { name: "Eliminar serie 2" }).click();
-  await expect(page.locator(".set-row")).toHaveCount(2);
   await expect(
-    page.getByRole("button", { name: "Eliminar serie 2" }),
+    page.getByRole("button", { name: /^Completar Serie 3/ }),
+  ).toHaveCount(0);
+  await page.getByRole("button", { name: "Deshacer" }).click();
+  await expect(
+    page.getByRole("button", { name: /^Completar Serie 3/ }),
+  ).toHaveCount(1);
+
+  // La serie siguiente hereda carga y repeticiones de la completada.
+  await page.getByRole("button", { name: /^Completar Serie 2/ }).click();
+  await expect(
+    page.getByRole("button", { name: /^Desmarcar Serie 2: 1 × 115 kg/ }),
   ).toBeVisible();
-  for (const checkbox of await page.locator(".set-checkbox input").all()) {
-    await checkbox.check();
-  }
   await page.getByRole("button", { name: "Finalizar" }).click();
   await expect(page.getByText("Sesión finalizada").first()).toBeVisible();
 
-  await page.getByRole("link", { name: "Abrir perfil de usuario" }).click();
+  await page.getByRole("link", { name: "Abrir perfil de Javier" }).click();
   await page.locator("#measurement-form input[type=date]").fill("2026-08-08");
-  await page
-    .locator("#measurement-form input[inputmode=decimal]")
-    .nth(1)
-    .fill("77,9");
+  await page.locator("#measurement-form").getByLabel("Peso").fill("77,9");
   await page.getByRole("button", { name: "Añadir medición" }).click();
   await expect(page.getByText("Medición añadida")).toBeVisible();
 
-  await page.getByRole("link", { name: "Progreso" }).click();
-  await expect(
-    page.getByRole("heading", { name: "Peso muerto" }),
-  ).toBeVisible();
+  await page
+    .getByRole("navigation")
+    .getByRole("link", { name: "Progreso" })
+    .click();
+  await expect(page.getByRole("link", { name: /Peso muerto/ })).toBeVisible();
 
-  const registrationReady = await page.evaluate(async () => {
-    if (!("serviceWorker" in navigator)) return false;
-    await navigator.serviceWorker.ready;
-    if (!navigator.serviceWorker.controller) {
-      await new Promise<void>((resolve) => {
-        navigator.serviceWorker.addEventListener(
-          "controllerchange",
-          () => resolve(),
-          {
-            once: true,
-          },
-        );
-      });
-    }
-    return true;
-  });
-  expect(registrationReady).toBe(true);
-  const offlineState = await page.evaluate(async () => {
-    const cacheNames = await caches.keys();
-    const cachedRequests = (
+  await waitForServiceWorkerControl(page);
+  const hasProgressDocument = await page.evaluate(async () => {
+    const names = await caches.keys();
+    const requests = (
       await Promise.all(
-        cacheNames.map(async (cacheName) =>
-          (await caches.open(cacheName)).keys(),
-        ),
+        names.map(async (name) => (await caches.open(name)).keys()),
       )
     ).flat();
-    return {
-      isControlled: navigator.serviceWorker.controller !== null,
-      hasProgressDocument: cachedRequests.some(
-        (request) => new URL(request.url).pathname === "/progress/",
-      ),
-    };
+    return requests.some(
+      (request) => new URL(request.url).pathname === "/progress/",
+    );
   });
-  expect(offlineState).toEqual({
-    isControlled: true,
-    hasProgressDocument: true,
-  });
+  expect(hasProgressDocument).toBe(true);
   await context.setOffline(true);
   await page.reload();
   await expect(
     page.getByRole("heading", { name: "Progreso", exact: true }),
   ).toBeVisible();
-  await expect(
-    page.getByRole("heading", { name: "Peso muerto" }),
-  ).toBeVisible();
+  await expect(page.getByRole("link", { name: /Peso muerto/ })).toBeVisible();
   await context.setOffline(false);
 
-  await page.getByRole("link", { name: "Ajustes" }).click();
+  await page
+    .getByRole("navigation")
+    .getByRole("link", { name: "Ajustes" })
+    .click();
   const downloadPromise = page.waitForEvent("download");
-  await page.getByRole("button", { name: "Descargar copia actual" }).click();
-  const download = await downloadPromise;
-  const backupPath = await download.path();
-  expect(backupPath).not.toBeNull();
-  await page.locator('input[type="file"]').setInputFiles(backupPath ?? "");
+  await page.getByRole("button", { name: "Descargar copia" }).click();
+  const backupPath = await (await downloadPromise).path();
+  await page.locator('input[type="file"]').setInputFiles(backupPath);
   await expect(page.getByText("Javier").last()).toBeVisible();
-  page.once("dialog", (dialog) => dialog.accept());
   await page
     .getByRole("button", { name: "Reemplazar todos los datos" })
     .click();
+  await page.getByRole("button", { name: "Reemplazar datos" }).click();
   await expect(
     page.getByRole("heading", { name: "Hola, Javier" }),
   ).toBeVisible();
 
-  await page.getByRole("link", { name: "Historial" }).click();
-  await expect(page.getByRole("heading", { name: "Historial" })).toBeVisible();
-  page.once("dialog", (dialog) => dialog.accept());
-  await page.getByRole("button", { name: "Eliminar entrenamiento" }).click();
+  await page
+    .getByRole("navigation")
+    .getByRole("link", { name: "Historial" })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Historial", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: /^Opciones del entreno/ }).click();
+  await page.getByRole("button", { name: "Eliminar entreno" }).click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Eliminar entreno" })
+    .click();
   await expect(page.getByText("Historial vacío")).toBeVisible();
 });

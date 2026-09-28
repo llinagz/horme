@@ -15,5 +15,10 @@ export default defineConfig([
     "out/**",
     "public/sw.js",
     "public/swe-worker-*.js",
+    "coverage/**",
+    "playwright-report/**",
+    "test-results/**",
+    ".playwright-cli/**",
+    "codex/**",
   ]),
 ]);

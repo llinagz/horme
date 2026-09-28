@@ -5,7 +5,8 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, type ReactNode } from "react";
 import { ChartNoAxesCombined, History, House, Settings } from "lucide-react";
 import { useAthleteProfile } from "./data-hooks";
-import { PwaLifecycle } from "./pwa-lifecycle";
+import { LoadingState } from "./ui/states";
+import styles from "./app-shell.module.css";
 
 const navigationItems = [
   { href: "/", label: "Inicio", icon: House },
@@ -14,7 +15,21 @@ const navigationItems = [
   { href: "/settings", label: "Ajustes", icon: Settings },
 ] as const;
 
-export function AppShell({ children }: { children: ReactNode }) {
+export function getInitial(displayName: string): string {
+  return displayName.trim().slice(0, 1).toLocaleUpperCase("es-ES");
+}
+
+/**
+ * Marco de las pantallas con perfil. `navigation={false}` deja la parte baja
+ * libre para la barra de acciones de la sesión.
+ */
+export function AppShell({
+  children,
+  navigation = true,
+}: {
+  children: ReactNode;
+  navigation?: boolean;
+}) {
   const pathname = usePathname();
   const router = useRouter();
   const profile = useAthleteProfile();
@@ -23,60 +38,48 @@ export function AppShell({ children }: { children: ReactNode }) {
     if (profile === null) router.replace("/onboarding");
   }, [profile, router]);
 
-  if (profile === undefined || profile === null) {
-    return (
-      <main className="centered-state">
-        <div className="brand-mark" aria-hidden="true">
-          Η
-        </div>
-        <p>Preparando Hormé…</p>
-      </main>
-    );
-  }
+  if (profile === undefined || profile === null)
+    return <LoadingState label="Preparando Hormé…" />;
 
   return (
-    <div className="app-frame">
-      <PwaLifecycle />
-      <header className="topbar">
-        <Link href="/" className="wordmark" aria-label="Hormé, inicio">
-          <span className="brand-mark brand-mark-small">Η</span> HORMÉ
+    <div className={styles.frame} data-navigation={navigation}>
+      <header className={styles.topbar}>
+        <Link href="/" className={styles.wordmark} aria-label="Hormé, inicio">
+          <span className="brand-mark" aria-hidden="true">
+            Η
+          </span>
         </Link>
         <Link
           href="/profile"
-          className="profile-link"
-          aria-label="Abrir perfil de usuario"
+          className={styles.avatar}
+          aria-label={`Abrir perfil de ${profile.displayName}`}
         >
-          <span className="avatar">
-            {profile.displayName.slice(0, 1).toLocaleUpperCase("es-ES")}
-          </span>
-          <span>{profile.displayName}</span>
+          {getInitial(profile.displayName)}
         </Link>
       </header>
-      <main className="page-content">{children}</main>
-      <nav className="bottom-navigation" aria-label="Navegación principal">
-        {navigationItems.map((item) => {
-          const Icon = item.icon;
-          const isActive =
-            item.href === "/"
-              ? pathname === "/"
-              : pathname.startsWith(item.href);
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={
-                isActive ? "navigation-item active" : "navigation-item"
-              }
-              aria-current={isActive ? "page" : undefined}
-            >
-              <span className="navigation-icon" aria-hidden="true">
-                <Icon size={21} strokeWidth={1.8} />
-              </span>
-              <span>{item.label}</span>
-            </Link>
-          );
-        })}
-      </nav>
+      <main className={styles.content}>{children}</main>
+      {navigation ? (
+        <nav className={styles.navigation} aria-label="Navegación principal">
+          {navigationItems.map((item) => {
+            const Icon = item.icon;
+            const isActive =
+              item.href === "/"
+                ? pathname === "/"
+                : pathname.startsWith(item.href);
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={styles.navigationItem}
+                aria-current={isActive ? "page" : undefined}
+              >
+                <Icon aria-hidden="true" strokeWidth={1.9} />
+                <span>{item.label}</span>
+              </Link>
+            );
+          })}
+        </nav>
+      ) : null}
     </div>
   );
 }

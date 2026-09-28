@@ -1,5 +1,4 @@
 import {
-  calculateEstimatedOneRepMax,
   calculateSessionVolume,
   summarizeExercisePerformance,
 } from "@/domain/calculations";
@@ -28,6 +27,10 @@ function hasRecordedMetric(setRecord: SetRecord): boolean {
   );
 }
 
+/**
+ * Series que cuentan para el progreso: las marcadas como hechas y, en sesiones
+ * finalizadas, también las que tienen datos aunque no se marcaran una a una.
+ */
 export function getRecordedSets(history: ExerciseHistoryEntry[]): SetRecord[] {
   return history.flatMap(({ session, sets }) =>
     sets.flatMap((setRecord) => {
@@ -42,24 +45,22 @@ export function getRecordedSets(history: ExerciseHistoryEntry[]): SetRecord[] {
 export async function listExerciseProgress(): Promise<
   ExerciseProgressSummary[]
 > {
-  const definitions =
-    await trainingSessionRepository.listExerciseDefinitionsWithHistory();
-  const summaries = await Promise.all(
-    definitions.map(async (exercise) => {
-      const history = await trainingSessionRepository.listExerciseHistory(
-        exercise.exerciseDefinitionId,
-      );
-      const sets = getRecordedSets(history);
+  const [definitions, histories] = await Promise.all([
+    trainingSessionRepository.listExerciseDefinitionsWithHistory(),
+    trainingSessionRepository.listAllExerciseHistories(),
+  ]);
+  return definitions
+    .map((exercise) => {
+      const history = histories.get(exercise.exerciseDefinitionId) ?? [];
       return {
         exercise,
-        ...summarizeExercisePerformance(sets),
+        ...summarizeExercisePerformance(getRecordedSets(history)),
         latestSessionDate: history[0]?.session.sessionDate ?? "",
       };
-    }),
-  );
-  return summaries.toSorted((left, right) =>
-    right.latestSessionDate.localeCompare(left.latestSessionDate),
-  );
+    })
+    .toSorted((left, right) =>
+      right.latestSessionDate.localeCompare(left.latestSessionDate),
+    );
 }
 
 export interface ExerciseProgressPoint {
@@ -69,42 +70,22 @@ export interface ExerciseProgressPoint {
   maximumWeightKilograms?: number;
 }
 
-export async function getExerciseProgressPoints(
-  exerciseDefinitionId: string,
-): Promise<ExerciseProgressPoint[]> {
-  const history =
-    await trainingSessionRepository.listExerciseHistory(exerciseDefinitionId);
+/** Un punto por sesión, en orden cronológico, para las gráficas. */
+export function getExerciseProgressPoints(
+  history: ExerciseHistoryEntry[],
+): ExerciseProgressPoint[] {
   return history
     .map((entry) => {
       const completedSets = getRecordedSets([entry]);
-      let estimatedOneRepMaxKilograms: number | undefined;
-      let maximumWeightKilograms: number | undefined;
-      for (const setRecord of completedSets) {
-        if (setRecord.weightKilograms === undefined) continue;
-        maximumWeightKilograms = Math.max(
-          maximumWeightKilograms ?? 0,
-          setRecord.weightKilograms,
-        );
-        if (setRecord.repetitions !== undefined) {
-          const estimate = calculateEstimatedOneRepMax(
-            setRecord.repetitions,
-            setRecord.weightKilograms,
-          );
-          if (estimate !== undefined)
-            estimatedOneRepMaxKilograms = Math.max(
-              estimatedOneRepMaxKilograms ?? 0,
-              estimate,
-            );
-        }
-      }
+      const summary = summarizeExercisePerformance(completedSets);
       return {
         date: entry.session.sessionDate,
         volumeKilograms: calculateSessionVolume(completedSets),
-        ...(estimatedOneRepMaxKilograms !== undefined
-          ? { estimatedOneRepMaxKilograms }
+        ...(summary.estimatedOneRepMaxKilograms !== undefined
+          ? { estimatedOneRepMaxKilograms: summary.estimatedOneRepMaxKilograms }
           : {}),
-        ...(maximumWeightKilograms !== undefined
-          ? { maximumWeightKilograms }
+        ...(summary.maximumActualWeightKilograms !== undefined
+          ? { maximumWeightKilograms: summary.maximumActualWeightKilograms }
           : {}),
       };
     })

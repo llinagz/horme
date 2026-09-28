@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import styles from "./pwa-lifecycle.module.css";
 
 export function PwaLifecycle() {
   const [waitingWorker, setWaitingWorker] = useState<ServiceWorker | null>(
     null,
   );
   const isRefreshing = useRef(false);
+  const isUpdateRequested = useRef(false);
 
   useEffect(() => {
     if ("storage" in navigator && "persist" in navigator.storage)
@@ -14,8 +16,10 @@ export function PwaLifecycle() {
     if (!("serviceWorker" in navigator)) return;
 
     let registration: ServiceWorkerRegistration | undefined;
+    // El primer service worker también toma el control (`clientsClaim`); solo
+    // se recarga cuando lo ha pedido el usuario, para no perder lo escrito.
     const handleControllerChange = () => {
-      if (isRefreshing.current) return;
+      if (!isUpdateRequested.current || isRefreshing.current) return;
       isRefreshing.current = true;
       window.location.reload();
     };
@@ -50,12 +54,15 @@ export function PwaLifecycle() {
 
   if (!waitingWorker) return null;
   return (
-    <aside className="update-banner" role="status">
-      <span>Hay una versión nueva preparada.</span>
+    <aside className={styles.banner} role="status">
+      <span>Hay una versión nueva de Hormé.</span>
       <button
         type="button"
-        className="text-button"
-        onClick={() => waitingWorker.postMessage({ type: "SKIP_WAITING" })}
+        className="button primary"
+        onClick={() => {
+          isUpdateRequested.current = true;
+          waitingWorker.postMessage({ type: "SKIP_WAITING" });
+        }}
       >
         Actualizar ahora
       </button>
