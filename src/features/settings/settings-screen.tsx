@@ -40,15 +40,15 @@ function downloadJson(
   link.href = url;
   link.download = fileName;
   link.click();
-  URL.revokeObjectURL(url);
+  // Revocar en el mismo tick puede cortar la descarga en Safari y Firefox.
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 export function SettingsScreen() {
   const router = useRouter();
-  const [backupStatusRefreshKey, setBackupStatusRefreshKey] = useState(0);
   const backupStatus = useLiveQuery(
     () => getBackupStatus(),
-    [backupStatusRefreshKey],
+    [],
     defaultBackupStatus,
   );
   const customExercises = useLiveQuery(
@@ -88,7 +88,6 @@ export function SettingsScreen() {
       const backup = await createBackup();
       downloadJson(backup);
       await markBackupCreated(backup.exportedAt);
-      setBackupStatusRefreshKey((current) => current + 1);
       setMessage({
         text: "Copia descargada. Guárdala en una ubicación personal segura.",
         tone: "success",

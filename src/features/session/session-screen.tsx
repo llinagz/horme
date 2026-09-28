@@ -15,9 +15,13 @@ import type {
   WodFormat,
   WodScaling,
 } from "@/domain/entities";
+import { getErrorMessage } from "@/domain/errors";
 import { parseLocalizedNumber } from "@/domain/validation";
 import { exerciseDefinitionRepository } from "@/infrastructure/repositories/exercise-definition-repository";
-import { trainingSessionRepository } from "@/infrastructure/repositories/training-session-repository";
+import {
+  trainingSessionRepository,
+  type TrainingSessionChanges,
+} from "@/infrastructure/repositories/training-session-repository";
 import { EmptyState, InlineMessage, PageHeading } from "@/components/ui";
 
 const blockOptions: Array<{ type: TrainingBlockType; label: string }> = [
@@ -27,6 +31,11 @@ const blockOptions: Array<{ type: TrainingBlockType; label: string }> = [
   { type: "wod", label: "WOD" },
   { type: "free", label: "Libre" },
 ];
+
+/** `""` (sin valorar) se guarda como `undefined` para vaciar el campo. */
+function optionalNumber(value: string): number | undefined {
+  return value === "" ? undefined : Number(value);
+}
 
 function numericValue(value: FormDataEntryValue | null): number | undefined {
   return typeof value === "string" ? parseLocalizedNumber(value) : undefined;
@@ -615,6 +624,11 @@ export function SessionScreen() {
     );
 
   const session = aggregate.session;
+  const saveSession = (changes: TrainingSessionChanges) => {
+    trainingSessionRepository
+      .update(session.trainingSessionId, changes)
+      .catch((error: unknown) => setMessage(getErrorMessage(error)));
+  };
   const handleToggleCompleted = async () => {
     try {
       if (session.status === "completed")
@@ -661,12 +675,13 @@ export function SessionScreen() {
           <span>Fecha</span>
           <input
             type="date"
+            required
             defaultValue={session.sessionDate}
-            onChange={(event) =>
-              void trainingSessionRepository.update(session.trainingSessionId, {
-                sessionDate: event.target.value,
-              })
-            }
+            onChange={(event) => {
+              // Un campo de fecha vacío no es una fecha: se conserva la anterior.
+              if (!event.target.value) return;
+              saveSession({ sessionDate: event.target.value });
+            }}
           />
         </label>
         <div className="two-columns">
@@ -674,14 +689,11 @@ export function SessionScreen() {
             <span>RPE (1–10)</span>
             <select
               defaultValue={session.perceivedExertion ?? ""}
-              onChange={(event) => {
-                const value = Number(event.target.value);
-                if (value)
-                  void trainingSessionRepository.update(
-                    session.trainingSessionId,
-                    { perceivedExertion: value },
-                  );
-              }}
+              onChange={(event) =>
+                saveSession({
+                  perceivedExertion: optionalNumber(event.target.value),
+                })
+              }
             >
               <option value="">Sin valorar</option>
               {Array.from({ length: 10 }, (_, index) => (
@@ -695,13 +707,9 @@ export function SessionScreen() {
             <span>Dolor (0–10)</span>
             <select
               defaultValue={session.painLevel ?? ""}
-              onChange={(event) => {
-                if (event.target.value !== "")
-                  void trainingSessionRepository.update(
-                    session.trainingSessionId,
-                    { painLevel: Number(event.target.value) },
-                  );
-              }}
+              onChange={(event) =>
+                saveSession({ painLevel: optionalNumber(event.target.value) })
+              }
             >
               <option value="">Sin valorar</option>
               {Array.from({ length: 11 }, (_, index) => (
@@ -718,11 +726,7 @@ export function SessionScreen() {
             rows={3}
             defaultValue={session.feelings}
             placeholder="¿Cómo ha ido el entrenamiento?"
-            onBlur={(event) =>
-              void trainingSessionRepository.update(session.trainingSessionId, {
-                feelings: event.target.value,
-              })
-            }
+            onBlur={(event) => saveSession({ feelings: event.target.value })}
           />
         </label>
       </section>

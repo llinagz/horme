@@ -5,27 +5,31 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { formatLocalDate } from "@/domain/dates";
+import { getErrorMessage } from "@/domain/errors";
 import { trainingSessionRepository } from "@/infrastructure/repositories/training-session-repository";
-import { EmptyState, PageHeading } from "@/components/ui";
+import { EmptyState, InlineMessage, PageHeading } from "@/components/ui";
 
 export function HistoryScreen() {
   const router = useRouter();
-  const [refreshKey, setRefreshKey] = useState(0);
-  const sessions = useLiveQuery(
-    () => trainingSessionRepository.list(),
-    [refreshKey],
-    [],
-  );
+  const [errorMessage, setErrorMessage] = useState("");
+  const sessions = useLiveQuery(() => trainingSessionRepository.list(), [], []);
   const handleDuplicate = async (trainingSessionId: string) => {
-    const duplicateId =
-      await trainingSessionRepository.duplicateSession(trainingSessionId);
-    router.push(`/session?trainingSessionId=${duplicateId}`);
+    try {
+      const duplicateId =
+        await trainingSessionRepository.duplicateSession(trainingSessionId);
+      router.push(`/session?trainingSessionId=${duplicateId}`);
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error, "No se ha podido duplicar"));
+    }
   };
   const handleRemove = async (trainingSessionId: string) => {
     if (!window.confirm("¿Eliminar este entrenamiento y todos sus datos?"))
       return;
-    await trainingSessionRepository.remove(trainingSessionId);
-    setRefreshKey((currentKey) => currentKey + 1);
+    try {
+      await trainingSessionRepository.remove(trainingSessionId);
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error, "No se ha podido eliminar"));
+    }
   };
   return (
     <div className="stack-large">
@@ -34,6 +38,9 @@ export function HistoryScreen() {
         title="Historial"
         description="Borradores y sesiones finalizadas, siempre disponibles en este dispositivo."
       />
+      {errorMessage ? (
+        <InlineMessage tone="error">{errorMessage}</InlineMessage>
+      ) : null}
       {sessions.length === 0 ? (
         <EmptyState
           title="Historial vacío"

@@ -40,10 +40,7 @@ test("onboarding, entrenamiento, medición, progreso, offline y copia", async ({
 
   await page.getByRole("link", { name: "Abrir perfil de usuario" }).click();
   await page.locator("#measurement-form input[type=date]").fill("2026-08-08");
-  await page
-    .locator("#measurement-form input[inputmode=decimal]")
-    .nth(1)
-    .fill("77,9");
+  await page.locator("#measurement-form").getByLabel("Peso").fill("77,9");
   await page.getByRole("button", { name: "Añadir medición" }).click();
   await expect(page.getByText("Medición añadida")).toBeVisible();
 
@@ -115,7 +112,7 @@ test("onboarding, entrenamiento, medición, progreso, offline y copia", async ({
     page.getByRole("heading", { name: "Hola, Javier" }),
   ).toBeVisible();
 
-  await page.getByRole("link", { name: "Historial" }).click();
+  await page.getByRole("link", { name: "Historial", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Historial" })).toBeVisible();
   page.once("dialog", (dialog) => dialog.accept());
   await page.getByRole("button", { name: "Eliminar entrenamiento" }).click();

@@ -5,3 +5,7 @@ public/sw.js
 public/swe-worker-*.js
 playwright-report
 test-results
+coverage
+.playwright-cli
+codex
+*.tsbuildinfo

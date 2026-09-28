@@ -5,7 +5,8 @@ import Link from "next/link";
 import { useLiveQuery } from "dexie-react-hooks";
 import { listExerciseProgress } from "@/application/progress";
 import { getSessionWellbeingTrend } from "@/domain/calculations";
-import { normalizeWodName } from "@/domain/dates";
+import { groupBy } from "@/domain/collections";
+import { formatLocalDate, normalizeWodName } from "@/domain/dates";
 import { trainingSessionRepository } from "@/infrastructure/repositories/training-session-repository";
 import { useBodyMeasurements } from "@/components/data-hooks";
 import { EmptyState, PageHeading, SectionHeading } from "@/components/ui";
@@ -33,7 +34,7 @@ export function ProgressScreen() {
       ? []
       : [{ date: item.measurementDate, weight: item.weightKilograms }],
   );
-  const wodGroups = Map.groupBy(
+  const wodGroups = groupBy(
     wodHistory,
     (entry) =>
       `${normalizeWodName(entry.block.wodConfiguration?.name ?? "")}::${entry.block.wodConfiguration?.format ?? "free"}`,
@@ -133,7 +134,7 @@ export function ProgressScreen() {
                 <div>
                   {entries.map((entry) => (
                     <span key={entry.block.trainingBlockId}>
-                      {entry.session.sessionDate}:{" "}
+                      {formatLocalDate(entry.session.sessionDate)}:{" "}
                       {entry.block.wodConfiguration?.result || "sin resultado"}
                     </span>
                   ))}

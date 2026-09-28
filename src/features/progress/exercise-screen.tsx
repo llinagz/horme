@@ -25,11 +25,10 @@ const ProgressChart = dynamic(
 export function ExerciseScreen() {
   const exerciseDefinitionId =
     useSearchParams().get("exerciseDefinitionId") ?? "";
+  // `null` distingue «no existe» de `undefined`, que significa «cargando».
   const exercise = useLiveQuery(
     async () =>
-      (await exerciseDefinitionRepository.list({ includeArchived: true })).find(
-        (item) => item.exerciseDefinitionId === exerciseDefinitionId,
-      ),
+      (await exerciseDefinitionRepository.get(exerciseDefinitionId)) ?? null,
     [exerciseDefinitionId],
   );
   const history = useLiveQuery(
@@ -37,11 +36,7 @@ export function ExerciseScreen() {
     [exerciseDefinitionId],
     [],
   );
-  const points = useLiveQuery(
-    () => getExerciseProgressPoints(exerciseDefinitionId),
-    [exerciseDefinitionId],
-    [],
-  );
+  const points = getExerciseProgressPoints(history);
   const recordedSets = getRecordedSets(history);
   const summary = summarizeExercisePerformance(recordedSets);
   const bestSets = history

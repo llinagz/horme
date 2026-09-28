@@ -31,8 +31,8 @@ export function HomeDashboard() {
     [],
     defaultBackupStatus,
   );
+  const draft = useLiveQuery(() => trainingSessionRepository.getActiveDraft());
   const currentBodyValues = getCurrentBodyValues(measurements);
-  const draft = sessions.find((session) => session.status === "draft");
 
   const handleNewSession = async () => {
     const trainingSessionId = await trainingSessionRepository.create();

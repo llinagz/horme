@@ -11,7 +11,6 @@ export type BodyMeasurementInput = Pick<
 
 export const bodyMeasurementRepository = {
   async list(): Promise<BodyMeasurement[]> {
-    await initializeDatabase();
     return (await database.bodyMeasurements.toArray()).toSorted(
       (left, right) =>
         left.measurementDate.localeCompare(right.measurementDate) ||
