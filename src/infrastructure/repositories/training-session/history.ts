@@ -71,6 +71,8 @@ function assembleHistoryEntries(
 }
 
 export const historyOperations = {
+  listSessionSummaries: () => listSessionSummaries(),
+
   /** Apariciones de un ejercicio, de la más reciente a la más antigua. */
   async listExerciseHistory(
     exerciseDefinitionId: string,
@@ -163,3 +165,81 @@ export const historyOperations = {
     });
   },
 };
+
+export interface TrainingSessionSummary {
+  session: TrainingSession;
+  blockTitles: string[];
+  exerciseNames: string[];
+  setCount: number;
+  completedSetCount: number;
+}
+
+/** Sesiones de la más reciente a la más antigua, con lo necesario para listarlas. */
+export async function listSessionSummaries(): Promise<
+  TrainingSessionSummary[]
+> {
+  return database.transaction(
+    "r",
+    [...sessionTables, database.exerciseDefinitions],
+    async () => {
+      const [sessions, blocks, movements, setRecords, exercises] =
+        await Promise.all([
+          database.trainingSessions.toArray(),
+          database.trainingBlocks.toArray(),
+          database.exerciseMovements.toArray(),
+          database.setRecords.toArray(),
+          database.exerciseDefinitions.toArray(),
+        ]);
+      const exerciseNames = new Map(
+        exercises.map((exercise) => [
+          exercise.exerciseDefinitionId,
+          exercise.name,
+        ]),
+      );
+      const blocksBySession = groupBy(
+        blocks.toSorted(byPosition),
+        (block) => block.trainingSessionId,
+      );
+      const movementsByBlock = groupBy(
+        movements.toSorted(byPosition),
+        (movement) => movement.trainingBlockId,
+      );
+      const setsByMovement = groupBy(
+        setRecords,
+        (setRecord) => setRecord.exerciseMovementId,
+      );
+      return sessions
+        .map((session) => {
+          const sessionBlocks =
+            blocksBySession.get(session.trainingSessionId) ?? [];
+          const sessionMovements = sessionBlocks.flatMap(
+            (block) => movementsByBlock.get(block.trainingBlockId) ?? [],
+          );
+          const sessionSets = sessionMovements.flatMap(
+            (movement) => setsByMovement.get(movement.exerciseMovementId) ?? [],
+          );
+          return {
+            session,
+            blockTitles: sessionBlocks.map((block) =>
+              block.type === "wod" && block.wodConfiguration?.name
+                ? block.wodConfiguration.name
+                : block.title,
+            ),
+            exerciseNames: [
+              ...new Set(
+                sessionMovements.flatMap((movement) => {
+                  const name = exerciseNames.get(movement.exerciseDefinitionId);
+                  return name ? [name] : [];
+                }),
+              ),
+            ],
+            setCount: sessionSets.length,
+            completedSetCount: sessionSets.filter(
+              (setRecord) => setRecord.isCompleted,
+            ).length,
+          };
+        })
+        .toSorted((left, right) => byNewestEntry(left, right));
+    },
+  );
+}

@@ -2,11 +2,13 @@ import Link from "next/link";
 
 export default function NotFound() {
   return (
-    <main className="centered-state">
-      <div className="brand-mark">Η</div>
-      <h1>Esta sección no existe</h1>
-      <Link href="/" className="primary-button">
-        Volver a inicio
+    <main className="loading">
+      <span className="brand-mark large" aria-hidden="true">
+        Η
+      </span>
+      <h1 className="title-md">Esta página no existe</h1>
+      <Link href="/" className="button primary large">
+        Ir al inicio
       </Link>
     </main>
   );

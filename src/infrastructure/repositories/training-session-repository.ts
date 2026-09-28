@@ -7,6 +7,7 @@ import { setOperations } from "./training-session/sets";
 export type { TrainingBlockChanges } from "./training-session/blocks";
 export type {
   ExerciseHistoryEntry,
+  TrainingSessionSummary,
   WodHistoryEntry,
 } from "./training-session/history";
 export type { ExerciseMovementChanges } from "./training-session/movements";

@@ -3,188 +3,223 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useLiveQuery } from "dexie-react-hooks";
-import { getCurrentBodyValues } from "@/domain/calculations";
-import { formatLocalDate } from "@/domain/dates";
+import { ChevronRight, Copy, ShieldCheck } from "lucide-react";
 import { listExerciseProgress } from "@/application/progress";
-import { getBackupStatus, type BackupStatus } from "@/infrastructure/backup";
+import { getCurrentBodyValues } from "@/domain/calculations";
+import {
+  formatNumber,
+  formatSessionTitle,
+  formatShortDate,
+  pluralize,
+} from "@/domain/format";
+import { getBackupStatus } from "@/infrastructure/backup";
 import { trainingSessionRepository } from "@/infrastructure/repositories/training-session-repository";
 import {
   useAthleteProfile,
   useBodyMeasurements,
 } from "@/components/data-hooks";
-import { EmptyState, SectionHeading } from "@/components/ui";
-
-const defaultBackupStatus: BackupStatus = { shouldRemind: false };
+import { InstallHint } from "@/components/install-hint";
+import { Kotinos } from "@/components/ui/kotinos";
+import { Figure, LoadingState } from "@/components/ui/states";
+import { useAction } from "@/components/ui/toast";
+import { SessionRow } from "@/features/history/session-row";
+import styles from "./home.module.css";
 
 export function HomeDashboard() {
   const router = useRouter();
+  const run = useAction();
   const profile = useAthleteProfile();
   const measurements = useBodyMeasurements();
-  const sessions = useLiveQuery(
-    () => trainingSessionRepository.listRecent(4),
-    [],
-    [],
+  const summaries = useLiveQuery(() =>
+    trainingSessionRepository.listSessionSummaries(),
   );
-  const records = useLiveQuery(() => listExerciseProgress(), [], []);
-  const backupStatus = useLiveQuery(
-    () => getBackupStatus(),
-    [],
-    defaultBackupStatus,
-  );
-  const draft = useLiveQuery(() => trainingSessionRepository.getActiveDraft());
-  const currentBodyValues = getCurrentBodyValues(measurements);
+  const records = useLiveQuery(() => listExerciseProgress());
+  const backupStatus = useLiveQuery(() => getBackupStatus());
 
-  const handleNewSession = async () => {
-    const trainingSessionId = await trainingSessionRepository.create();
-    router.push(`/session?trainingSessionId=${trainingSessionId}`);
-  };
+  if (summaries === undefined || records === undefined)
+    return <LoadingState label="Cargando tus entrenos…" />;
+
+  const draft = summaries
+    .filter((summary) => summary.session.status === "draft")
+    .toSorted((left, right) =>
+      right.session.updatedAt.localeCompare(left.session.updatedAt),
+    )[0];
+  const lastCompleted = summaries.find(
+    (summary) => summary.session.status === "completed",
+  );
+  const recent = summaries.filter((summary) => summary !== draft).slice(0, 3);
+  const bestRecords = records
+    .filter((record) => record.maximumActualWeightKilograms !== undefined)
+    .slice(0, 3);
+  const body = getCurrentBodyValues(measurements ?? []);
+
+  const startSession = () =>
+    void run(async () => {
+      const id = await trainingSessionRepository.create();
+      router.push(`/session?trainingSessionId=${id}`);
+    });
+  const repeatLast = (trainingSessionId: string) =>
+    void run(async () => {
+      const id =
+        await trainingSessionRepository.duplicateSession(trainingSessionId);
+      router.push(`/session?trainingSessionId=${id}`);
+    });
 
   return (
     <div className="stack-large">
-      <section className="hero-card marble-card">
-        <div>
-          <p className="eyebrow">Tu espacio de entrenamiento</p>
-          <h1>Hola, {profile?.displayName}</h1>
-          <p className="muted">
-            Constancia, técnica y una medida honesta del progreso.
-          </p>
-        </div>
-        {draft ? (
-          <Link
-            className="primary-button"
-            href={`/session?trainingSessionId=${draft.trainingSessionId}`}
-          >
-            Continuar sesión
-          </Link>
-        ) : (
-          <button
-            className="primary-button"
-            type="button"
-            onClick={handleNewSession}
-          >
-            Nueva sesión
-          </button>
-        )}
-      </section>
+      <h1 className="title">Hola, {profile?.displayName}</h1>
+      <InstallHint />
 
-      <section>
-        <SectionHeading
-          title="Resumen corporal"
-          link={
-            <Link href="/profile" className="text-link">
-              Ver perfil
-            </Link>
-          }
-        />
-        <div className="summary-grid">
-          <article className="stat-card">
-            <span className="stat-label">Altura</span>
-            <strong>
-              {currentBodyValues.heightCentimeters ?? "—"}
-              <small>{currentBodyValues.heightCentimeters ? " cm" : ""}</small>
-            </strong>
-          </article>
-          <article className="stat-card">
-            <span className="stat-label">Peso actual</span>
-            <strong>
-              {currentBodyValues.weightKilograms ?? "—"}
-              <small>{currentBodyValues.weightKilograms ? " kg" : ""}</small>
-            </strong>
-          </article>
-        </div>
-      </section>
-
-      <section>
-        <SectionHeading
-          title="Últimos entrenamientos"
-          link={
-            <Link href="/history" className="text-link">
-              Todo el historial
-            </Link>
-          }
-        />
-        {sessions.length === 0 ? (
-          <EmptyState
-            title="Todavía no hay sesiones"
-            description="Registra tu primer entrenamiento y aparecerá aquí."
+      {draft ? (
+        <Link
+          href={`/session?trainingSessionId=${draft.session.trainingSessionId}`}
+          className={styles.continue}
+        >
+          <div className={styles.continueText}>
+            <h2>Continuar sesión</h2>
+            <p>
+              {formatSessionTitle(draft.session.sessionDate)}
+              {draft.blockTitles.length > 0
+                ? `, ${draft.blockTitles.join(" y ")}`
+                : ""}
+            </p>
+          </div>
+          <Kotinos
+            total={draft.setCount}
+            done={draft.completedSetCount}
+            size="small"
+            tone="inverse"
           />
-        ) : (
-          <div className="list-card">
-            {sessions.map((session) => (
+        </Link>
+      ) : (
+        <section className={styles.start}>
+          <button
+            type="button"
+            className={`button primary large full ${styles.startButton}`}
+            onClick={startSession}
+          >
+            Empezar sesión
+          </button>
+          {lastCompleted ? (
+            <button
+              type="button"
+              className="button large full"
+              onClick={() =>
+                repeatLast(lastCompleted.session.trainingSessionId)
+              }
+            >
+              <Copy aria-hidden="true" size={20} />
+              Repetir la del{" "}
+              {formatShortDate(lastCompleted.session.sessionDate)}
+            </button>
+          ) : null}
+        </section>
+      )}
+
+      {bestRecords.length > 0 ? (
+        <section className="section">
+          <div className="section-head">
+            <h2 className="heading">Tus mejores cargas</h2>
+            <Link href="/progress" className="link">
+              Progreso
+            </Link>
+          </div>
+          <div className="list">
+            {bestRecords.map((record) => (
               <Link
-                key={session.trainingSessionId}
-                href={`/session?trainingSessionId=${session.trainingSessionId}`}
+                key={record.exercise.exerciseDefinitionId}
+                href={`/exercise?exerciseDefinitionId=${record.exercise.exerciseDefinitionId}`}
                 className="list-row"
               >
-                <span>
-                  <strong>{formatLocalDate(session.sessionDate)}</strong>
-                  <small>
-                    {session.status === "draft"
-                      ? "Borrador"
-                      : `Finalizada${session.perceivedExertion ? ` · RPE ${session.perceivedExertion}` : ""}`}
-                  </small>
-                </span>
-                <span aria-hidden="true">›</span>
+                <div>
+                  <strong>{record.exercise.name}</strong>
+                  <p>Último día, {formatShortDate(record.latestSessionDate)}</p>
+                </div>
+                <Figure
+                  className="record"
+                  value={formatNumber(record.maximumActualWeightKilograms)}
+                  unit="kg"
+                />
               </Link>
             ))}
           </div>
-        )}
-      </section>
+        </section>
+      ) : null}
 
-      <section>
-        <SectionHeading
-          title="Récords recientes"
-          link={
-            <Link href="/progress" className="text-link">
-              Ver progreso
+      {recent.length > 0 ? (
+        <section className="section">
+          <div className="section-head">
+            <h2 className="heading">Últimos entrenos</h2>
+            <Link href="/history" className="link">
+              Historial
             </Link>
-          }
-        />
-        {records.length === 0 ? (
-          <div className="quiet-card">
-            Completa series con carga para descubrir tus marcas.
           </div>
-        ) : (
-          <div className="horizontal-cards">
-            {records.slice(0, 4).map((record) => (
-              <Link
-                href={`/exercise?exerciseDefinitionId=${record.exercise.exerciseDefinitionId}`}
-                className="record-card"
-                key={record.exercise.exerciseDefinitionId}
-              >
-                <span className="eyebrow">Mejor carga</span>
-                <strong>{record.maximumActualWeightKilograms ?? "—"} kg</strong>
-                <span>{record.exercise.name}</span>
-              </Link>
+          <div className="list">
+            {recent.map((summary) => (
+              <SessionRow
+                key={summary.session.trainingSessionId}
+                summary={summary}
+              />
             ))}
           </div>
-        )}
+        </section>
+      ) : (
+        <p className="muted">
+          Aquí verás tus entrenos en cuanto registres el primero.
+        </p>
+      )}
+
+      <section className="section">
+        <div className="section-head">
+          <h2 className="heading">Tu cuerpo</h2>
+          <Link href="/profile" className="link">
+            Mediciones
+          </Link>
+        </div>
+        <div className="stats">
+          <div className="stat">
+            <span>Peso</span>
+            <Figure
+              value={formatNumber(body.weightKilograms) || "—"}
+              unit="kg"
+            />
+          </div>
+          <div className="stat">
+            <span>Altura</span>
+            <Figure
+              value={formatNumber(body.heightCentimeters) || "—"}
+              unit="cm"
+            />
+          </div>
+        </div>
       </section>
 
-      <Link
-        href="/settings"
-        className={
-          backupStatus.shouldRemind
-            ? "backup-card needs-attention"
-            : "backup-card"
-        }
-      >
-        <span aria-hidden="true">⬡</span>
-        <span>
-          <strong>
-            {backupStatus.shouldRemind
-              ? "Conviene crear una copia"
-              : "Copia local al día"}
-          </strong>
-          <small>
-            {backupStatus.reason ??
-              (backupStatus.lastBackupAt
-                ? `Última: ${new Date(backupStatus.lastBackupAt).toLocaleDateString("es-ES")}`
-                : "Se guardará cuando tengas datos")}
-          </small>
-        </span>
-        <span aria-hidden="true">›</span>
-      </Link>
+      {backupStatus ? (
+        <Link
+          href="/settings"
+          className={
+            backupStatus.shouldRemind
+              ? `${styles.backup} ${styles.backupDue}`
+              : styles.backup
+          }
+        >
+          <ShieldCheck aria-hidden="true" />
+          <span>
+            <strong>
+              {backupStatus.shouldRemind
+                ? "Haz una copia de tus datos"
+                : "Copia al día"}
+            </strong>
+            <small>
+              {backupStatus.reason ??
+                (backupStatus.lastBackupAt
+                  ? `Última el ${new Date(backupStatus.lastBackupAt).toLocaleDateString("es-ES", { day: "numeric", month: "long" })}`
+                  : `Tus ${pluralize(summaries.length, "sesión", "sesiones")} solo están en este móvil`)}
+            </small>
+          </span>
+          <ChevronRight aria-hidden="true" />
+        </Link>
+      ) : null}
     </div>
   );
 }

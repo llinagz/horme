@@ -4,9 +4,9 @@ const routes = [
   { path: "/", heading: "Hola, Ana" },
   { path: "/history/", heading: "Historial" },
   { path: "/progress/", heading: "Progreso" },
-  { path: "/profile/", heading: "Ana" },
+  { path: "/profile/", heading: "Perfil" },
   { path: "/settings/", heading: "Ajustes" },
-  { path: "/session/", heading: "Prepara una sesión" },
+  { path: "/session/", heading: "Empieza una sesión" },
   { path: "/exercise/", heading: "Elige un ejercicio" },
 ];
 
@@ -34,9 +34,19 @@ test("la primera visita no se recarga y deja el manifest en caché", async ({
     name: string;
     start_url: string;
     display: string;
-    icons: Array<{ src: string }>;
+    icons: Array<{ src: string; sizes: string; type: string; purpose: string }>;
   };
   expect(manifest).toMatchObject({ display: "standalone", start_url: "/" });
+  // Android e iOS necesitan iconos PNG; el enmascarable evita bordes blancos.
+  expect(manifest.icons).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ sizes: "192x192", type: "image/png" }),
+      expect.objectContaining({ sizes: "512x512", purpose: "maskable" }),
+    ]),
+  );
+  expect((await page.request.get("/icons/apple-touch-icon.png")).ok()).toBe(
+    true,
+  );
   for (const icon of manifest.icons) {
     expect((await page.request.get(icon.src)).ok(), icon.src).toBe(true);
   }

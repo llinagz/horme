@@ -1,0 +1,404 @@
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-8);
+  padding-bottom: calc(6rem + env(safe-area-inset-bottom, 0px));
+}
+
+.head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* ---------- Bloques ---------- */
+
+.block {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.blockHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-right: calc(var(--space-2) * -1);
+}
+
+.blockTitle {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  min-width: 0;
+}
+
+.blockTitle h2 {
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--olivo-hondo);
+  letter-spacing: 0.01em;
+}
+
+.blockTitle span {
+  font-size: var(--text-xs);
+  color: var(--tinta-suave);
+}
+
+.addExercise {
+  border-style: dashed;
+  background: transparent;
+  color: var(--olivo-hondo);
+}
+
+.startBlocks {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.blockTypes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 8rem), 1fr));
+  gap: var(--space-3);
+}
+
+.note {
+  font-size: var(--text-sm);
+  color: var(--tinta-suave);
+  white-space: pre-wrap;
+}
+
+.hint {
+  margin-top: calc(var(--space-2) * -1);
+  font-size: var(--text-xs);
+  color: var(--tinta-suave);
+}
+
+.menuActions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+/* ---------- Ejercicios ---------- */
+
+.exercise {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-4);
+  border: 1px solid var(--veta);
+  border-radius: var(--radius-l);
+  background: var(--marmol-alto);
+}
+
+.exerciseHead {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--space-2);
+  margin-right: calc(var(--space-2) * -1);
+}
+
+.exerciseTitle {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.exerciseTitle h3 {
+  font-size: var(--text-lg);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+}
+
+.previous {
+  font-size: var(--text-sm);
+  color: var(--tinta-suave);
+}
+
+.previous b {
+  color: var(--tinta);
+  font-weight: 600;
+}
+
+/* ---------- Series ---------- */
+
+.sets {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.set {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  align-items: center;
+  column-gap: var(--space-2);
+  min-height: 60px;
+  padding: var(--space-1);
+  border-radius: var(--radius-m);
+  transition: background var(--duration-fast) ease;
+}
+
+.set[data-done="true"] {
+  background: var(--enves);
+}
+
+.check {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  border-radius: 50%;
+  border: 2px solid var(--veta-fuerte);
+  background: var(--marmol-alto);
+  color: transparent;
+  cursor: pointer;
+  transition:
+    background var(--duration-fast) ease,
+    border-color var(--duration-fast) ease,
+    transform var(--duration-fast) ease;
+}
+
+.check:active {
+  transform: scale(0.92);
+}
+
+.check svg {
+  width: 22px;
+  height: 22px;
+}
+
+.check[aria-pressed="true"] {
+  background: var(--olivo);
+  border-color: var(--olivo);
+  color: var(--sobre-olivo);
+}
+
+.values {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  min-height: 48px;
+  align-content: center;
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: var(--radius-s);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.values .figure {
+  font-size: var(--text-xl);
+}
+
+.set[data-done="true"] .values .figure {
+  color: var(--olivo-hondo);
+}
+
+.valueGroup {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-3);
+}
+
+.times {
+  color: var(--veta-fuerte);
+  font-size: var(--text-lg);
+}
+
+/* La serie abierta: − y + debajo, a todo el ancho, para que nada se pise. */
+.active {
+  row-gap: var(--space-3);
+  padding: var(--space-3);
+  background: transparent;
+  box-shadow: inset 0 0 0 2px var(--olivo);
+}
+
+.active[data-done="true"] {
+  background: transparent;
+}
+
+.activeHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.activeLabel {
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.steppers {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-2);
+}
+
+/* ---------- WOD ---------- */
+
+.wod {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.wodName {
+  width: 100%;
+  min-height: var(--touch);
+  padding: 0;
+  border: 0;
+  border-bottom: 1px solid var(--veta);
+  background: transparent;
+  font: 400 var(--title-md) / 1.1 var(--font-title);
+}
+
+.wodName:focus {
+  outline: none;
+  border-bottom-color: var(--olivo);
+}
+
+.wodName::placeholder {
+  color: var(--veta-fuerte);
+}
+
+.timeInput {
+  font-size: var(--text-xl) !important;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.fieldError {
+  color: var(--peligro);
+  font-size: var(--text-xs);
+}
+
+/* ---------- Valoración ---------- */
+
+.wellbeing {
+  display: grid;
+  gap: var(--space-4);
+  padding-top: var(--space-6);
+  border-top: 1px solid var(--veta);
+}
+
+/* ---------- Selector de ejercicios ---------- */
+
+.search {
+  position: sticky;
+  top: 3.75rem;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 52px;
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-m);
+  border: 1px solid var(--veta);
+  background: var(--marmol);
+}
+
+.search:focus-within {
+  border-color: var(--olivo);
+}
+
+.search svg {
+  width: 20px;
+  height: 20px;
+  color: var(--tinta-suave);
+  flex: none;
+}
+
+.search input {
+  flex: 1;
+  min-width: 0;
+  min-height: 48px;
+  border: 0;
+  background: transparent;
+  font-size: var(--text-md);
+}
+
+.search input:focus {
+  outline: none;
+}
+
+.pickerGroup {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.pickerGroup h3 {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  color: var(--olivo-hondo);
+}
+
+.pickerGroup ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--veta);
+}
+
+.pickerOption {
+  display: grid;
+  width: 100%;
+  min-height: 56px;
+  align-content: center;
+  gap: 1px;
+  padding: var(--space-2) var(--space-1);
+  border: 0;
+  border-bottom: 1px solid var(--veta);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.pickerOption:active {
+  background: var(--marmol-hundido);
+}
+
+.pickerOption strong {
+  font-weight: 600;
+}
+
+.pickerOption span {
+  font-size: var(--text-sm);
+  color: var(--tinta-suave);
+}
+
+/* ---------- Barra del pulgar ---------- */
+
+.thumbbar {
+  position: fixed;
+  inset-inline: 0;
+  bottom: 0;
+  z-index: var(--z-bar);
+  display: grid;
+  grid-template-columns: 1fr 1fr 1.2fr;
+  gap: var(--space-2);
+  max-width: var(--content-width);
+  margin: 0 auto;
+  padding: var(--space-3) max(var(--space-4), env(safe-area-inset-right, 0px))
+    calc(var(--space-3) + env(safe-area-inset-bottom, 0px))
+    max(var(--space-4), env(safe-area-inset-left, 0px));
+  background: linear-gradient(to top, var(--marmol) 72%, transparent);
+}
+
+.thumbbar :global(.button) {
+  padding-inline: var(--space-3);
+}

@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import { initializeDatabase } from "@/infrastructure/database";
+import { LoadingState } from "./ui/states";
 
 export function DatabaseProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
@@ -13,25 +14,19 @@ export function DatabaseProvider({ children }: { children: ReactNode }) {
     );
   }, []);
 
-  if (state === "loading") {
-    return (
-      <main className="centered-state">
-        <div className="brand-mark" aria-hidden="true">
-          Η
-        </div>
-        <p>Preparando tus datos locales…</p>
-      </main>
-    );
-  }
+  if (state === "loading") return <LoadingState label="Abriendo tus datos…" />;
 
   if (state === "error") {
     return (
-      <main className="centered-state">
-        <div className="brand-mark" aria-hidden="true">
+      <main className="loading">
+        <span className="brand-mark large" aria-hidden="true">
           Η
-        </div>
-        <h1>No se puede abrir el almacenamiento local</h1>
-        <p>Comprueba que el navegador permite IndexedDB y vuelve a cargar.</p>
+        </span>
+        <h1 className="title-md">No se pueden abrir tus datos</h1>
+        <p>
+          El navegador no deja guardar datos en este sitio. Sal del modo privado
+          o permite el almacenamiento y vuelve a cargar.
+        </p>
       </main>
     );
   }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import styles from "./pwa-lifecycle.module.css";
 
 export function PwaLifecycle() {
   const [waitingWorker, setWaitingWorker] = useState<ServiceWorker | null>(
@@ -53,11 +54,11 @@ export function PwaLifecycle() {
 
   if (!waitingWorker) return null;
   return (
-    <aside className="update-banner" role="status">
-      <span>Hay una versión nueva preparada.</span>
+    <aside className={styles.banner} role="status">
+      <span>Hay una versión nueva de Hormé.</span>
       <button
         type="button"
-        className="text-button"
+        className="button primary"
         onClick={() => {
           isUpdateRequested.current = true;
           waitingWorker.postMessage({ type: "SKIP_WAITING" });

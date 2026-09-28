@@ -1,0 +1,110 @@
+/*
+ * Mármol y olivo. Mármol del Pentélico (blanco frío con vetas grises), olivo
+ * como único acento y bronce solo para récords. El tema oscuro es mármol
+ * negro, con su propia paleta.
+ */
+:root {
+  color-scheme: light;
+
+  /* Materiales */
+  --marmol: #f1f2ee;
+  --marmol-alto: #fafaf8;
+  --marmol-hundido: #e7e9e3;
+  --veta: #d6d9d1;
+  --veta-fuerte: #a9aea3;
+  --tinta: #1c231d;
+  --tinta-suave: #4a5249;
+  --olivo: #56703a;
+  --olivo-hondo: #3a4d26;
+  --enves: #e3e9d8;
+  --bronce: #8a6436;
+  --peligro: #9a3b2e;
+  --peligro-suave: #f3e3df;
+  --sobre-olivo: #fafaf8;
+  --sombra-hoja: 0 18px 40px -24px rgb(28 35 29 / 45%);
+
+  /* Tipografía */
+  --font-ui:
+    var(--font-commissioner), "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-title: var(--font-didot), "Didot", "Bodoni 72", Georgia, serif;
+  --text-xs: 0.8125rem;
+  --text-sm: 0.9375rem;
+  --text-md: 1.0625rem;
+  --text-lg: 1.375rem;
+  --text-xl: 1.625rem;
+  --text-2xl: 2.75rem;
+  --title-md: 1.75rem;
+  --title-lg: 2.125rem;
+
+  /* Espacio (múltiplos de 4 px) */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+
+  /* Formas */
+  --radius-s: 10px;
+  --radius-m: 14px;
+  --radius-l: 22px;
+  --radius-xl: 28px;
+  --radius-pill: 999px;
+  --touch: 48px;
+
+  /* Movimiento */
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --duration-fast: 150ms;
+  --duration: 250ms;
+
+  /* Capas */
+  --z-bar: 20;
+  --z-sheet: 40;
+  --z-toast: 50;
+
+  /* Alturas fijas que otras capas necesitan conocer */
+  --navigation-height: 4.5rem;
+  --content-width: 40rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --marmol: #141814;
+    --marmol-alto: #1d221d;
+    --marmol-hundido: #101310;
+    --veta: #2e352e;
+    --veta-fuerte: #4a534a;
+    --tinta: #e8ebe3;
+    --tinta-suave: #a9b0a5;
+    --olivo: #9db474;
+    --olivo-hondo: #c3d6a0;
+    --enves: #243020;
+    --bronce: #c99b61;
+    --peligro: #e08b7c;
+    --peligro-suave: #3a211d;
+    --sobre-olivo: #141814;
+    --sombra-hoja: 0 18px 40px -24px rgb(0 0 0 / 70%);
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --marmol: #141814;
+  --marmol-alto: #1d221d;
+  --marmol-hundido: #101310;
+  --veta: #2e352e;
+  --veta-fuerte: #4a534a;
+  --tinta: #e8ebe3;
+  --tinta-suave: #a9b0a5;
+  --olivo: #9db474;
+  --olivo-hondo: #c3d6a0;
+  --enves: #243020;
+  --bronce: #c99b61;
+  --peligro: #e08b7c;
+  --peligro-suave: #3a211d;
+  --sobre-olivo: #141814;
+  --sombra-hoja: 0 18px 40px -24px rgb(0 0 0 / 70%);
+}

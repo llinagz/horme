@@ -42,10 +42,25 @@ export const setOperations = {
     count: number,
     values: SetValues,
   ): Promise<void> {
-    await initializeDatabase();
     if (!Number.isInteger(count) || count < 1 || count > 20)
       throw new Error("El número de series debe estar entre 1 y 20");
-    const parsed = setValuesSchema.parse(values);
+    await setOperations.addSets(
+      exerciseMovementId,
+      Array.from({ length: count }, () => values),
+    );
+  },
+
+  /** Añade al final una serie pendiente por cada juego de valores. */
+  async addSets(
+    exerciseMovementId: string,
+    valuesList: SetValues[],
+  ): Promise<void> {
+    await initializeDatabase();
+    if (valuesList.length < 1 || valuesList.length > 20)
+      throw new Error("El número de series debe estar entre 1 y 20");
+    const parsedList = valuesList.map((values) =>
+      setValuesSchema.parse(values),
+    );
     const timestamp = now();
     await database.transaction("rw", sessionTables, async () => {
       await getMovementOrThrow(exerciseMovementId);
@@ -55,7 +70,7 @@ export const setOperations = {
         exerciseMovementId,
       );
       await database.setRecords.bulkAdd(
-        Array.from({ length: count }, (_, index) => ({
+        parsedList.map((parsed, index) => ({
           setRecordId: createUuid(),
           exerciseMovementId,
           position: firstPosition + index,
@@ -66,6 +81,34 @@ export const setOperations = {
         })),
       );
       await touchSessionForSet(exerciseMovementId, timestamp);
+    });
+  },
+
+  /** Vuelve a colocar una serie borrada en su posición (deshacer). */
+  async restoreSet(setRecord: SetRecord): Promise<void> {
+    await initializeDatabase();
+    const timestamp = now();
+    await database.transaction("rw", sessionTables, async () => {
+      await getMovementOrThrow(setRecord.exerciseMovementId);
+      const siblings = await database.setRecords
+        .where("exerciseMovementId")
+        .equals(setRecord.exerciseMovementId)
+        .count();
+      const position = Math.min(setRecord.position, siblings);
+      await database.setRecords
+        .where("exerciseMovementId")
+        .equals(setRecord.exerciseMovementId)
+        .and((item) => item.position >= position)
+        .modify((item) => {
+          item.position += 1;
+          item.updatedAt = timestamp;
+        });
+      await database.setRecords.add({
+        ...setRecord,
+        position,
+        updatedAt: timestamp,
+      });
+      await touchSessionForSet(setRecord.exerciseMovementId, timestamp);
     });
   },
 

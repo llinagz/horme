@@ -1,26 +1,27 @@
 "use client";
 
-import dynamic from "next/dynamic";
 import { useSearchParams } from "next/navigation";
 import { useLiveQuery } from "dexie-react-hooks";
 import {
-  describeSet,
   getExerciseProgressPoints,
   getRecordedSets,
 } from "@/application/progress";
 import { summarizeExercisePerformance } from "@/domain/calculations";
-import { formatLocalDate } from "@/domain/dates";
+import { formatNumber, formatShortDate, pluralize } from "@/domain/format";
+import { exerciseCategoryLabels } from "@/domain/labels";
 import { exerciseDefinitionRepository } from "@/infrastructure/repositories/exercise-definition-repository";
 import { trainingSessionRepository } from "@/infrastructure/repositories/training-session-repository";
-import { EmptyState, PageHeading, SectionHeading } from "@/components/ui";
+import { LazyProgressChart } from "@/components/lazy-progress-chart";
+import {
+  EmptyState,
+  Figure,
+  LoadingState,
+  PageHeader,
+} from "@/components/ui/states";
+import { describeSetValues } from "@/features/session/metrics";
+import styles from "./progress.module.css";
 
-const ProgressChart = dynamic(
-  () =>
-    import("@/components/progress-chart").then(
-      (module) => module.ProgressChart,
-    ),
-  { ssr: false },
-);
+const back = { href: "/progress", label: "Progreso" };
 
 export function ExerciseScreen() {
   const exerciseDefinitionId =
@@ -34,24 +35,7 @@ export function ExerciseScreen() {
   const history = useLiveQuery(
     () => trainingSessionRepository.listExerciseHistory(exerciseDefinitionId),
     [exerciseDefinitionId],
-    [],
   );
-  const points = getExerciseProgressPoints(history);
-  const recordedSets = getRecordedSets(history);
-  const summary = summarizeExercisePerformance(recordedSets);
-  const bestSets = history
-    .flatMap((entry) =>
-      getRecordedSets([entry]).map((setRecord) => ({
-        date: entry.session.sessionDate,
-        setRecord,
-      })),
-    )
-    .toSorted(
-      (left, right) =>
-        (right.setRecord.weightKilograms ?? 0) -
-        (left.setRecord.weightKilograms ?? 0),
-    )
-    .slice(0, 5);
 
   if (!exerciseDefinitionId)
     return (
@@ -60,109 +44,161 @@ export function ExerciseScreen() {
         description="Abre su ficha desde Progreso."
       />
     );
-  if (exercise === undefined)
-    return <p className="centered-state">Cargando ficha…</p>;
-  if (!exercise)
+  if (exercise === undefined || history === undefined)
+    return <LoadingState label="Cargando la ficha…" />;
+  if (exercise === null)
     return (
       <EmptyState
-        title="Ejercicio no encontrado"
-        description="Puede que se haya eliminado al restaurar otra copia."
+        title="Este ejercicio ya no existe"
+        description="Puede que se eliminara al restaurar otra copia."
       />
     );
 
+  const points = getExerciseProgressPoints(history);
+  const summary = summarizeExercisePerformance(getRecordedSets(history));
+  const bestSets = history
+    .flatMap((entry) =>
+      getRecordedSets([entry]).map((setRecord) => ({
+        date: entry.session.sessionDate,
+        setRecord,
+      })),
+    )
+    .filter(({ setRecord }) => setRecord.weightKilograms !== undefined)
+    .toSorted(
+      (left, right) =>
+        (right.setRecord.weightKilograms ?? 0) -
+          (left.setRecord.weightKilograms ?? 0) ||
+        (right.setRecord.repetitions ?? 0) - (left.setRecord.repetitions ?? 0),
+    )
+    .slice(0, 3);
+  const hasLoad = summary.maximumActualWeightKilograms !== undefined;
+
   return (
     <div className="stack-large">
-      <PageHeading
-        eyebrow={exercise.englishAlias}
+      <PageHeader
+        back={back}
         title={exercise.name}
-        description={exercise.category.replaceAll("-", " ")}
+        subtitle={[
+          exercise.englishAlias,
+          pluralize(history.length, "sesión", "sesiones"),
+        ]
+          .filter(Boolean)
+          .join(", ")}
       />
-      <div className="summary-grid three">
-        <article className="stat-card">
-          <span className="stat-label">Mayor carga</span>
-          <strong>
-            {summary.maximumActualWeightKilograms ?? "—"}
-            <small> kg</small>
-          </strong>
-        </article>
-        <article className="stat-card">
-          <span className="stat-label">1RM estimado</span>
-          <strong>
-            {summary.estimatedOneRepMaxKilograms?.toFixed(1) ?? "—"}
-            <small> kg</small>
-          </strong>
-        </article>
-        <article className="stat-card">
-          <span className="stat-label">Volumen total</span>
-          <strong>
-            {summary.totalVolumeKilograms.toFixed(0)}
-            <small> kg</small>
-          </strong>
-        </article>
-      </div>
-      <section className="chart-card">
-        <SectionHeading title="Evolución" />
-        <ProgressChart
-          data={points}
-          series={[
-            {
-              dataKey: "maximumWeightKilograms",
-              label: "Carga máxima",
-              color: "#526246",
-              unit: " kg",
-            },
-            {
-              dataKey: "estimatedOneRepMaxKilograms",
-              label: "1RM estimado",
-              color: "#9a6a3a",
-              unit: " kg",
-            },
-          ]}
-        />
-      </section>
-      <section>
-        <SectionHeading title="Mejores series" />
-        {bestSets.length === 0 ? (
-          <div className="quiet-card">No hay series completas con datos.</div>
-        ) : (
-          <div className="list-card">
-            {bestSets.map(({ date, setRecord }) => (
-              <div className="list-row static" key={setRecord.setRecordId}>
-                <span>
-                  <strong>{describeSet(setRecord)}</strong>
-                  <small>{formatLocalDate(date)}</small>
-                </span>
-                <span>★</span>
+
+      {hasLoad ? (
+        <section className={styles.hero}>
+          <Figure
+            value={formatNumber(
+              Math.round(
+                summary.estimatedOneRepMaxKilograms ??
+                  summary.maximumActualWeightKilograms ??
+                  0,
+              ),
+            )}
+            unit={
+              summary.estimatedOneRepMaxKilograms !== undefined
+                ? "kg de 1RM estimado"
+                : "kg de carga máxima"
+            }
+          />
+          <p className="muted small">
+            Carga máxima real{" "}
+            {formatNumber(summary.maximumActualWeightKilograms)} kg, volumen
+            total {formatNumber(Math.round(summary.totalVolumeKilograms))} kg
+          </p>
+        </section>
+      ) : (
+        <p className="muted">
+          {exerciseCategoryLabels[exercise.category]},{" "}
+          {pluralize(
+            summary.completedSetCount,
+            "serie registrada",
+            "series registradas",
+          )}
+        </p>
+      )}
+
+      {hasLoad ? (
+        <section className="section">
+          <h2 className="heading">Evolución</h2>
+          <LazyProgressChart
+            title={`Evolución de ${exercise.name}`}
+            data={points}
+            series={[
+              {
+                dataKey: "estimatedOneRepMaxKilograms",
+                label: "1RM estimado",
+                tone: "olive",
+                unit: "kg",
+              },
+              {
+                dataKey: "maximumWeightKilograms",
+                label: "Carga máxima",
+                tone: "ink",
+                unit: "kg",
+              },
+            ]}
+          />
+        </section>
+      ) : null}
+
+      {bestSets.length > 0 ? (
+        <section className="section">
+          <h2 className="heading">Mejores series</h2>
+          <div className="list">
+            {bestSets.map(({ date, setRecord }, index) => (
+              <div key={setRecord.setRecordId} className="list-row">
+                <div>
+                  <strong>{describeSetValues(setRecord)}</strong>
+                  <p>{formatShortDate(date)}</p>
+                </div>
+                {index === 0 ? (
+                  <span className="chip bronze">Récord</span>
+                ) : null}
               </div>
             ))}
           </div>
+        </section>
+      ) : null}
+
+      <section className="section">
+        <h2 className="heading">Historial</h2>
+        {history.length === 0 ? (
+          <p className="muted small">
+            Todavía no has hecho este ejercicio en ninguna sesión.
+          </p>
+        ) : (
+          <div>
+            {history.map((entry) => (
+              <article
+                key={entry.movement.exerciseMovementId}
+                className={styles.entry}
+              >
+                <header className={styles.entryHead}>
+                  <strong>{formatShortDate(entry.session.sessionDate)}</strong>
+                  <span>{entry.block.title}</span>
+                </header>
+                <div className={styles.setChips}>
+                  {entry.sets.length === 0 ? (
+                    <span className="muted small">Sin series</span>
+                  ) : (
+                    entry.sets.map((setRecord) => (
+                      <span
+                        key={setRecord.setRecordId}
+                        className={
+                          setRecord.isCompleted ? "chip olive" : "chip"
+                        }
+                      >
+                        {describeSetValues(setRecord) || "Sin datos"}
+                      </span>
+                    ))
+                  )}
+                </div>
+              </article>
+            ))}
+          </div>
         )}
-      </section>
-      <section>
-        <SectionHeading title="Historial" />
-        <div className="list-card">
-          {history.map((entry) => (
-            <div
-              className="history-entry"
-              key={entry.movement.exerciseMovementId}
-            >
-              <strong>{formatLocalDate(entry.session.sessionDate)}</strong>
-              <small>{entry.block.title}</small>
-              <div>
-                {entry.sets.map((setRecord) => (
-                  <span
-                    className={
-                      setRecord.isCompleted ? "set-chip complete" : "set-chip"
-                    }
-                    key={setRecord.setRecordId}
-                  >
-                    {describeSet(setRecord)}
-                  </span>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
       </section>
     </div>
   );

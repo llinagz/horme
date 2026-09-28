@@ -1,40 +1,64 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useLiveQuery } from "dexie-react-hooks";
-import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
+import { Download, Upload } from "lucide-react";
+import {
+  useEffect,
+  useState,
+  useSyncExternalStore,
+  type ChangeEvent,
+  type FormEvent,
+} from "react";
+import packageInfo from "../../../package.json";
 import type { ExerciseCategory, ExerciseMetric } from "@/domain/entities";
+import { getErrorMessage } from "@/domain/errors";
+import { formatShortDate } from "@/domain/format";
+import {
+  exerciseCategoryLabels,
+  exerciseMetricLabels,
+  toOptions,
+} from "@/domain/labels";
 import {
   createBackup,
   getBackupFileName,
   getBackupStatus,
   markBackupCreated,
+  parseBackup,
   previewBackup,
   replaceDatabaseFromBackup,
   type BackupPreview,
-  type BackupStatus,
   type HormeBackup,
 } from "@/infrastructure/backup";
 import { exerciseDefinitionRepository } from "@/infrastructure/repositories/exercise-definition-repository";
-import { InlineMessage, PageHeading, SectionHeading } from "@/components/ui";
+import {
+  getThemePreference,
+  setThemePreference,
+  type ThemePreference,
+} from "@/components/theme";
+import { useConfirm } from "@/components/ui/sheet";
+import { InlineMessage, PageHeader, Segmented } from "@/components/ui/states";
+import { useAction, useToast } from "@/components/ui/toast";
+import styles from "./settings.module.css";
 
-const metricOptions: Array<{ value: ExerciseMetric; label: string }> = [
-  { value: "repetitions", label: "Repeticiones" },
-  { value: "weightKilograms", label: "Carga" },
-  { value: "durationSeconds", label: "Tiempo" },
-  { value: "distanceMeters", label: "Distancia" },
-  { value: "calories", label: "Calorías" },
+const themeOptions: Array<{ value: ThemePreference; label: string }> = [
+  { value: "system", label: "Como el móvil" },
+  { value: "light", label: "Mármol" },
+  { value: "dark", label: "Mármol negro" },
 ];
 
-const defaultBackupStatus: BackupStatus = { shouldRemind: false };
+const metricOptions = (
+  Object.keys(exerciseMetricLabels) as ExerciseMetric[]
+).map((metric) => ({
+  value: metric,
+  label: exerciseMetricLabels[metric].label,
+}));
 
-function downloadJson(
-  backup: HormeBackup,
-  fileName = getBackupFileName(),
-): void {
+const subscribeToNothing = () => () => {};
+
+function downloadJson(value: unknown, fileName: string): void {
   const url = URL.createObjectURL(
-    new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" }),
+    new Blob([JSON.stringify(value, null, 2)], { type: "application/json" }),
   );
   const link = document.createElement("a");
   link.href = url;
@@ -46,29 +70,30 @@ function downloadJson(
 
 export function SettingsScreen() {
   const router = useRouter();
-  const backupStatus = useLiveQuery(
-    () => getBackupStatus(),
-    [],
-    defaultBackupStatus,
+  const run = useAction();
+  const { show } = useToast();
+  const confirm = useConfirm();
+  const backupStatus = useLiveQuery(() => getBackupStatus());
+  const customExercises = useLiveQuery(async () =>
+    (await exerciseDefinitionRepository.list({ includeArchived: true })).filter(
+      (item) => item.origin === "custom",
+    ),
   );
-  const customExercises = useLiveQuery(
-    async () =>
-      (
-        await exerciseDefinitionRepository.list({ includeArchived: true })
-      ).filter((item) => item.origin === "custom"),
-    [],
-    [],
+  // El tema vive en localStorage: se lee sin efecto y sin romper la hidratación.
+  const storedTheme = useSyncExternalStore(
+    subscribeToNothing,
+    getThemePreference,
+    () => "system" as const,
   );
-  const [message, setMessage] = useState<{
-    text: string;
-    tone: "success" | "error";
-  } | null>(null);
+  const [chosenTheme, setChosenTheme] = useState<ThemePreference | null>(null);
+  const theme = chosenTheme ?? storedTheme;
   const [selectedBackup, setSelectedBackup] = useState<HormeBackup | null>(
     null,
   );
   const [backupPreview, setBackupPreview] = useState<BackupPreview | null>(
     null,
   );
+  const [restoreError, setRestoreError] = useState("");
   const [shouldDownloadCurrent, setShouldDownloadCurrent] = useState(true);
   const [isStoragePersistent, setIsStoragePersistent] = useState<
     boolean | null
@@ -83,202 +108,186 @@ export function SettingsScreen() {
       void navigator.storage.persisted().then(setIsStoragePersistent);
   }, []);
 
-  const handleExport = async () => {
-    try {
-      const backup = await createBackup();
-      downloadJson(backup);
-      await markBackupCreated(backup.exportedAt);
-      setMessage({
-        text: "Copia descargada. Guárdala en una ubicación personal segura.",
-        tone: "success",
-      });
-    } catch (error) {
-      setMessage({
-        text:
-          error instanceof Error
-            ? error.message
-            : "No se ha podido crear la copia",
-        tone: "error",
-      });
-    }
+  const changeTheme = (preference: ThemePreference | undefined) => {
+    if (!preference) return;
+    setChosenTheme(preference);
+    setThemePreference(preference);
   };
 
-  const handleFile = async (event: ChangeEvent<HTMLInputElement>) => {
+  const exportBackup = () =>
+    void run(
+      async () => {
+        const backup = await createBackup();
+        downloadJson(backup, getBackupFileName());
+        await markBackupCreated(backup.exportedAt);
+      },
+      { success: "Copia descargada. Guárdala fuera del móvil." },
+    );
+
+  const chooseFile = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
+    event.target.value = "";
     if (!file) return;
     try {
       const value: unknown = JSON.parse(await file.text());
-      const preview = previewBackup(value);
-      setSelectedBackup(value as HormeBackup);
-      setBackupPreview(preview);
-      setMessage(null);
+      setBackupPreview(previewBackup(value));
+      setSelectedBackup(parseBackup(value));
+      setRestoreError("");
     } catch (error) {
       setSelectedBackup(null);
       setBackupPreview(null);
-      setMessage({
-        text:
-          error instanceof Error
-            ? `Archivo rechazado: ${error.message}`
-            : "El archivo no es una copia válida de Hormé",
-        tone: "error",
-      });
+      setRestoreError(
+        error instanceof SyntaxError
+          ? "Este archivo no es una copia de Hormé."
+          : `No se puede usar este archivo: ${getErrorMessage(error)}`,
+      );
     }
   };
 
-  const handleRestore = async () => {
-    if (!selectedBackup || !backupPreview) return;
-    if (
-      !window.confirm(
-        "La restauración reemplazará por completo los datos actuales. ¿Continuar?",
-      )
-    )
-      return;
-    try {
+  const restore = async () => {
+    if (!selectedBackup) return;
+    const accepted = await confirm({
+      title: "¿Reemplazar todos los datos?",
+      description:
+        "Lo que hay ahora en este móvil se sustituirá por la copia. Si algo falla, tus datos actuales se quedan como están.",
+      confirmLabel: "Reemplazar datos",
+      tone: "danger",
+    });
+    if (!accepted) return;
+    const restored = await run(async () => {
       if (shouldDownloadCurrent)
-        downloadJson(await createBackup(), getBackupFileName());
+        downloadJson(
+          await createBackup(),
+          getBackupFileName().replace(".json", "-antes-de-restaurar.json"),
+        );
       await replaceDatabaseFromBackup(selectedBackup);
+      return true;
+    });
+    if (restored) {
+      show({ message: "Copia restaurada" });
       router.replace("/");
-    } catch (error) {
-      setMessage({
-        text:
-          error instanceof Error
-            ? error.message
-            : "La restauración ha fallado; los datos anteriores siguen intactos",
-        tone: "error",
-      });
     }
   };
 
-  const handleCustomExercise = async (event: FormEvent<HTMLFormElement>) => {
+  const createExercise = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
-    try {
-      await exerciseDefinitionRepository.createCustom({
-        name: String(form.get("name") ?? ""),
-        englishAlias: String(form.get("englishAlias") ?? ""),
-        category: String(form.get("category")) as ExerciseCategory,
-        metrics: selectedMetrics,
-      });
-      event.currentTarget.reset();
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    const created = await run(
+      async () => {
+        await exerciseDefinitionRepository.createCustom({
+          name: String(data.get("name") ?? ""),
+          englishAlias: String(data.get("englishAlias") ?? ""),
+          category: String(data.get("category")) as ExerciseCategory,
+          metrics: selectedMetrics,
+        });
+        return true;
+      },
+      { success: "Ejercicio creado" },
+    );
+    if (created) {
+      form.reset();
       setSelectedMetrics(["repetitions", "weightKilograms"]);
-      setMessage({ text: "Ejercicio personalizado creado", tone: "success" });
-    } catch (error) {
-      setMessage({
-        text:
-          error instanceof Error
-            ? error.message
-            : "No se ha podido crear el ejercicio",
-        tone: "error",
-      });
     }
   };
 
   return (
     <div className="stack-large">
-      <PageHeading
-        eyebrow="Privacidad y datos"
+      <PageHeader
         title="Ajustes"
-        description="Hormé funciona sin cuenta, servidor, publicidad ni telemetría."
+        subtitle="Sin cuenta, sin servidor y sin anuncios. Todo se queda en este móvil."
       />
-      {message ? (
-        <InlineMessage tone={message.tone}>{message.text}</InlineMessage>
-      ) : null}
 
-      <section className="settings-card">
-        <SectionHeading title="Perfil" />
-        <Link href="/profile" className="settings-row">
-          <span className="settings-icon">♙</span>
-          <span>
-            <strong>Nombre y mediciones</strong>
-            <small>Edita tu identidad y evolución corporal</small>
-          </span>
-          <span>›</span>
-        </Link>
-      </section>
-
-      <section className="settings-card">
-        <SectionHeading title="Almacenamiento local" />
-        <div className="storage-status">
-          <span
-            className={isStoragePersistent ? "status-dot ok" : "status-dot"}
-          />
-          <span>
-            <strong>
-              {isStoragePersistent
-                ? "Almacenamiento persistente concedido"
-                : "Datos guardados en este navegador"}
-            </strong>
-            <small>
-              {isStoragePersistent
-                ? "El navegador evitará borrarlos automáticamente."
-                : "Hormé ha solicitado protección persistente cuando el navegador la permite."}
-            </small>
-          </span>
-        </div>
+      <section className="section">
+        <h2 className="heading">Apariencia</h2>
+        <Segmented
+          label="Tema"
+          options={themeOptions}
+          value={theme}
+          onChange={changeTheme}
+        />
       </section>
 
       <section
         className={
-          backupStatus.shouldRemind
-            ? "settings-card highlighted"
-            : "settings-card"
+          backupStatus?.shouldRemind
+            ? `sheet-card ${styles.attention}`
+            : "sheet-card"
         }
       >
-        <SectionHeading title="Copia de seguridad" />
-        <p className="muted">
-          Incluye perfil, mediciones, catálogo y entrenamientos. El JSON no está
-          cifrado.
-        </p>
-        {backupStatus.shouldRemind ? (
-          <InlineMessage>{backupStatus.reason}</InlineMessage>
-        ) : null}
-        <button type="button" className="primary-button" onClick={handleExport}>
-          Descargar copia actual
+        <div className="stack">
+          <h2 className="heading">Copia de seguridad</h2>
+          <p className="muted small">
+            Si borras los datos del navegador o cambias de móvil, solo podrás
+            recuperar tus entrenos con una copia. Incluye perfil, mediciones,
+            ejercicios y sesiones, sin cifrar.
+          </p>
+          {backupStatus?.shouldRemind && backupStatus.reason ? (
+            <InlineMessage tone="attention">
+              {backupStatus.reason}
+            </InlineMessage>
+          ) : null}
+        </div>
+        <button
+          type="button"
+          className="button primary large"
+          onClick={exportBackup}
+        >
+          <Download aria-hidden="true" size={20} />
+          Descargar copia
         </button>
-        <small className="block-note">
-          {backupStatus.lastBackupAt
-            ? `Última copia: ${new Date(backupStatus.lastBackupAt).toLocaleString("es-ES")}`
-            : "Aún no hay ninguna copia registrada"}
-        </small>
+        {backupStatus?.lastBackupAt ? (
+          <p className="muted small">
+            Última copia el{" "}
+            {new Date(backupStatus.lastBackupAt).toLocaleDateString("es-ES", {
+              day: "numeric",
+              month: "long",
+            })}
+          </p>
+        ) : null}
       </section>
 
-      <section className="settings-card">
-        <SectionHeading title="Restaurar una copia" />
-        <label className="file-picker">
+      <section className="sheet-card">
+        <h2 className="heading">Restaurar una copia</h2>
+        <label className={`button large ${styles.filePicker}`}>
+          <Upload aria-hidden="true" size={20} />
+          Elegir archivo de copia
           <input
             type="file"
             accept="application/json,.json"
-            onChange={handleFile}
+            onChange={(event) => void chooseFile(event)}
           />
-          <span>Seleccionar archivo JSON</span>
         </label>
+        {restoreError ? (
+          <InlineMessage tone="error">{restoreError}</InlineMessage>
+        ) : null}
         {backupPreview ? (
-          <div className="backup-preview">
-            <span>
-              <small>Perfil</small>
-              <strong>{backupPreview.displayName ?? "Sin perfil"}</strong>
-            </span>
-            <span>
-              <small>Sesiones</small>
-              <strong>{backupPreview.sessionCount}</strong>
-            </span>
-            <span>
-              <small>Mediciones</small>
-              <strong>{backupPreview.measurementCount}</strong>
-            </span>
-            <span>
-              <small>Rango</small>
-              <strong>
-                {backupPreview.firstSessionDate
-                  ? `${backupPreview.firstSessionDate} — ${backupPreview.lastSessionDate}`
+          <dl className={styles.preview}>
+            <div>
+              <dt>Perfil</dt>
+              <dd>{backupPreview.displayName ?? "Sin perfil"}</dd>
+            </div>
+            <div>
+              <dt>Sesiones</dt>
+              <dd>{backupPreview.sessionCount}</dd>
+            </div>
+            <div>
+              <dt>Mediciones</dt>
+              <dd>{backupPreview.measurementCount}</dd>
+            </div>
+            <div>
+              <dt>Fechas</dt>
+              <dd>
+                {backupPreview.firstSessionDate && backupPreview.lastSessionDate
+                  ? `${formatShortDate(backupPreview.firstSessionDate)} a ${formatShortDate(backupPreview.lastSessionDate)}`
                   : "Sin sesiones"}
-              </strong>
-            </span>
-          </div>
+              </dd>
+            </div>
+          </dl>
         ) : null}
         {selectedBackup ? (
           <>
-            <label className="checkbox-field">
+            <label className="toggle">
               <input
                 type="checkbox"
                 checked={shouldDownloadCurrent}
@@ -286,12 +295,12 @@ export function SettingsScreen() {
                   setShouldDownloadCurrent(event.target.checked)
                 }
               />
-              <span>Descargar antes los datos actuales</span>
+              <span>Descargar antes una copia de lo que hay ahora</span>
             </label>
             <button
               type="button"
-              className="danger-button"
-              onClick={handleRestore}
+              className="button large danger"
+              onClick={() => void restore()}
             >
               Reemplazar todos los datos
             </button>
@@ -299,33 +308,40 @@ export function SettingsScreen() {
         ) : null}
       </section>
 
-      <section className="settings-card">
-        <SectionHeading title="Ejercicios personalizados" />
-        <form className="form-stack" onSubmit={handleCustomExercise}>
-          <div className="two-columns">
+      <section className="sheet-card">
+        <h2 className="heading">Ejercicios propios</h2>
+        <form
+          className="stack"
+          onSubmit={(event) => void createExercise(event)}
+        >
+          <div className="field-row">
             <label className="field">
-              <span>Nombre en español</span>
-              <input name="name" required />
+              <span>Nombre</span>
+              <input name="name" required maxLength={60} />
             </label>
             <label className="field">
-              <span>Alias inglés</span>
-              <input name="englishAlias" />
+              <span>Nombre en inglés</span>
+              <input
+                name="englishAlias"
+                maxLength={60}
+                placeholder="Opcional"
+              />
             </label>
           </div>
           <label className="field">
             <span>Categoría</span>
             <select name="category" defaultValue="material-funcional">
-              <option value="fuerza-halterofilia">Fuerza y halterofilia</option>
-              <option value="gimnasia">Gimnasia</option>
-              <option value="peso-corporal">Peso corporal</option>
-              <option value="monoestructural">Monoestructural</option>
-              <option value="material-funcional">Material funcional</option>
+              {toOptions(exerciseCategoryLabels).map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
             </select>
           </label>
-          <fieldset className="metric-fieldset">
-            <legend>Métricas aplicables</legend>
+          <fieldset className={styles.metrics}>
+            <legend className="field-label">Qué vas a apuntar</legend>
             {metricOptions.map((option) => (
-              <label className="checkbox-field" key={option.value}>
+              <label className="toggle" key={option.value}>
                 <input
                   type="checkbox"
                   checked={selectedMetrics.includes(option.value)}
@@ -341,36 +357,35 @@ export function SettingsScreen() {
               </label>
             ))}
           </fieldset>
-          <button type="submit" className="secondary-button">
+          <button type="submit" className="button">
             Crear ejercicio
           </button>
         </form>
-        {customExercises.length > 0 ? (
-          <div className="custom-exercise-list">
+        {customExercises && customExercises.length > 0 ? (
+          <div className="list">
             {customExercises.map((exercise) => (
-              <div
-                className="measurement-row"
-                key={exercise.exerciseDefinitionId}
-              >
-                <span>
+              <div key={exercise.exerciseDefinitionId} className="list-row">
+                <div>
                   <strong>{exercise.name}</strong>
-                  <small>
+                  <p>
                     {exercise.isArchived
-                      ? "Archivado"
-                      : exercise.englishAlias || "Personalizado"}
-                  </small>
-                </span>
+                      ? "Archivado, no aparece al añadir ejercicios"
+                      : exerciseCategoryLabels[exercise.category]}
+                  </p>
+                </div>
                 <button
                   type="button"
-                  className="text-button"
+                  className="button quiet"
                   onClick={() =>
-                    void exerciseDefinitionRepository.setArchived(
-                      exercise.exerciseDefinitionId,
-                      !exercise.isArchived,
+                    void run(() =>
+                      exerciseDefinitionRepository.setArchived(
+                        exercise.exerciseDefinitionId,
+                        !exercise.isArchived,
+                      ),
                     )
                   }
                 >
-                  {exercise.isArchived ? "Restaurar" : "Archivar"}
+                  {exercise.isArchived ? "Recuperar" : "Archivar"}
                 </button>
               </div>
             ))}
@@ -378,10 +393,20 @@ export function SettingsScreen() {
         ) : null}
       </section>
 
-      <footer className="settings-footer">
-        <div className="brand-mark brand-mark-small">Η</div>
-        <strong>Hormé 0.1.0</strong>
-        <span>Todo tu esfuerzo, solo tuyo.</span>
+      <section className="section">
+        <h2 className="heading">Almacenamiento</h2>
+        <p className="muted small">
+          {isStoragePersistent
+            ? "El navegador ha aceptado no borrar tus datos por falta de espacio."
+            : "El navegador podría borrar los datos si le falta espacio. Instala Hormé en la pantalla de inicio y haz copias a menudo."}
+        </p>
+      </section>
+
+      <footer className={styles.footer}>
+        <span className="brand-mark" aria-hidden="true">
+          Η
+        </span>
+        <span>Hormé {packageInfo.version}</span>
       </footer>
     </div>
   );
