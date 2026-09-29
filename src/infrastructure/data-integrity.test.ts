@@ -109,12 +109,13 @@ describe("las escrituras nunca dejan datos que la copia no pueda restaurar", () 
     ).rejects.toThrow();
   });
 
-  it("rechaza categorías y métricas desconocidas en ejercicios personalizados", async () => {
+  it("rechaza grupos, materiales y métricas desconocidos en ejercicios personalizados", async () => {
     await expect(
       exerciseDefinitionRepository.createCustom({
         name: "Algo",
         englishAlias: "",
-        category: "yoga" as never,
+        muscleGroup: "yoga" as never,
+        equipment: "barra",
         metrics: ["repetitions"],
       }),
     ).rejects.toThrow();
@@ -122,7 +123,17 @@ describe("las escrituras nunca dejan datos que la copia no pueda restaurar", () 
       exerciseDefinitionRepository.createCustom({
         name: "Algo",
         englishAlias: "",
-        category: "gimnasia",
+        muscleGroup: "espalda",
+        equipment: "elastico" as never,
+        metrics: ["repetitions"],
+      }),
+    ).rejects.toThrow();
+    await expect(
+      exerciseDefinitionRepository.createCustom({
+        name: "Algo",
+        englishAlias: "",
+        muscleGroup: "espalda",
+        equipment: "barra",
         metrics: ["pasos" as never],
       }),
     ).rejects.toThrow();

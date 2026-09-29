@@ -113,15 +113,10 @@ export function ProgressScreen() {
         />
       </section>
 
-      <section className="section">
-        <h2 className="heading">WOD repetidos</h2>
-        {comparableWods.length === 0 ? (
-          <p className="muted small">
-            Cuando repitas un WOD con el mismo nombre y formato, sus resultados
-            aparecerán aquí juntos.
-          </p>
-        ) : (
-          comparableWods.map((entries) => {
+      {comparableWods.length > 0 ? (
+        <section className="section">
+          <h2 className="heading">WOD repetidos</h2>
+          {comparableWods.map((entries) => {
             const configuration = entries[0]?.block.wodConfiguration;
             return (
               <article
@@ -149,9 +144,9 @@ export function ProgressScreen() {
                 </ul>
               </article>
             );
-          })
-        )}
-      </section>
+          })}
+        </section>
+      ) : null}
     </div>
   );
 }

@@ -60,7 +60,108 @@ describe("copias", () => {
     await replaceDatabaseFromBackup(serialized);
 
     const restored = await createBackup();
-    expect(restored.collections).toEqual(backup.collections);
+    // Tras restaurar se reponen los ejercicios integrados que la copia no
+    // traía; todo lo que sí traía tiene que quedar exactamente igual.
+    expect({
+      ...restored.collections,
+      exerciseDefinitions: [],
+    }).toEqual({ ...backup.collections, exerciseDefinitions: [] });
+    expect(restored.collections.exerciseDefinitions).toEqual(
+      expect.arrayContaining(backup.collections.exerciseDefinitions),
+    );
+  });
+
+  it("exporta con la versión 2, que incluye los grupos musculares", async () => {
+    await seed();
+    const backup = await createBackup();
+    expect(backup.schemaVersion).toBe(2);
+    expect(backup.collections.exerciseDefinitions[0]).toHaveProperty(
+      "muscleGroup",
+    );
+  });
+
+  it("restaura una copia v1 anterior a los grupos musculares", async () => {
+    await seed();
+    const current = await createBackup();
+    const legacy = {
+      ...current,
+      schemaVersion: 1,
+      collections: {
+        ...current.collections,
+        exerciseDefinitions: [
+          {
+            exerciseDefinitionId: "built-in-003",
+            name: "Peso muerto",
+            englishAlias: "Deadlift",
+            category: "fuerza-halterofilia",
+            metrics: ["repetitions", "weightKilograms"],
+            origin: "built-in",
+            isArchived: false,
+            createdAt: "2026-01-01T00:00:00.000Z",
+            updatedAt: "2026-01-01T00:00:00.000Z",
+          },
+          {
+            exerciseDefinitionId: "custom-1",
+            name: "Remo en TRX",
+            englishAlias: "",
+            category: "gimnasia",
+            metrics: ["repetitions"],
+            origin: "custom",
+            isArchived: false,
+            createdAt: "2026-01-01T00:00:00.000Z",
+            updatedAt: "2026-01-01T00:00:00.000Z",
+          },
+        ],
+        exerciseMovements: [],
+        setRecords: [],
+      },
+    };
+
+    const parsed = parseBackup(legacy);
+    expect(parsed.schemaVersion).toBe(2);
+    expect(parsed.collections.exerciseDefinitions).toMatchObject([
+      {
+        name: "Peso muerto convencional",
+        muscleGroup: "espalda",
+        equipment: "barra",
+      },
+      {
+        name: "Remo en TRX",
+        muscleGroup: "cuerpo-completo",
+        equipment: "peso-corporal",
+      },
+    ]);
+
+    await clearDatabase();
+    await replaceDatabaseFromBackup(legacy);
+    // Los ejercicios que la copia no traía se reponen desde el catálogo.
+    expect(
+      await database.exerciseDefinitions.get("built-in-065"),
+    ).toMatchObject({ name: "Curl de bíceps con mancuerna" });
+    expect(
+      await database.exerciseDefinitions.get("built-in-003"),
+    ).toMatchObject({
+      muscleGroup: "espalda",
+      secondaryMuscleGroups: ["isquios", "gluteos"],
+    });
+  });
+
+  it("rechaza una copia v2 sin la clasificación de los ejercicios", async () => {
+    await seed();
+    const backup = await createBackup();
+    const withoutGroup: Record<string, unknown> = {
+      ...backup.collections.exerciseDefinitions[0]!,
+    };
+    delete withoutGroup.muscleGroup;
+    expect(() =>
+      parseBackup({
+        ...backup,
+        collections: {
+          ...backup.collections,
+          exerciseDefinitions: [withoutGroup],
+        },
+      }),
+    ).toThrow();
   });
 
   it("resume la copia antes de restaurar", async () => {
@@ -79,7 +180,7 @@ describe("copias", () => {
     await seed();
     const backup = await createBackup();
     expect(() => parseBackup({ ...backup, format: "otra-app" })).toThrow();
-    expect(() => parseBackup({ ...backup, schemaVersion: 2 })).toThrow();
+    expect(() => parseBackup({ ...backup, schemaVersion: 3 })).toThrow();
     expect(() => parseBackup({ ...backup, extra: true })).toThrow();
     expect(() =>
       parseBackup({

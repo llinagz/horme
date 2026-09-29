@@ -1,10 +1,15 @@
 import type { z } from "zod";
 import type { ExerciseDefinition } from "@/domain/entities";
 import { createUuid } from "@/domain/ids";
-import { customExerciseInputSchema } from "@/domain/schemas";
+import { categoryForEquipment } from "@/domain/labels";
+import {
+  customExerciseChangesSchema,
+  customExerciseInputSchema,
+} from "@/domain/schemas";
 import { database, initializeDatabase } from "../database";
 
 export type CustomExerciseInput = z.input<typeof customExerciseInputSchema>;
+export type CustomExerciseChanges = z.input<typeof customExerciseChangesSchema>;
 
 export const exerciseDefinitionRepository = {
   async get(
@@ -31,7 +36,10 @@ export const exerciseDefinitionRepository = {
       exerciseDefinitionId,
       name: parsed.name,
       englishAlias: parsed.englishAlias,
-      category: parsed.category,
+      category: categoryForEquipment(parsed.equipment),
+      muscleGroup: parsed.muscleGroup,
+      secondaryMuscleGroups: parsed.secondaryMuscleGroups,
+      equipment: parsed.equipment,
       metrics: [...new Set(parsed.metrics)],
       origin: "custom",
       isArchived: false,
@@ -39,6 +47,26 @@ export const exerciseDefinitionRepository = {
       updatedAt: timestamp,
     });
     return exerciseDefinitionId;
+  },
+
+  /** Corrige nombre, alias y clasificación de un ejercicio personalizado. */
+  async updateCustom(
+    exerciseDefinitionId: string,
+    changes: CustomExerciseChanges,
+  ): Promise<void> {
+    await initializeDatabase();
+    const parsed = customExerciseChangesSchema.parse(changes);
+    await database.transaction("rw", database.exerciseDefinitions, async () => {
+      const definition =
+        await database.exerciseDefinitions.get(exerciseDefinitionId);
+      if (!definition || definition.origin !== "custom")
+        throw new Error("Solo se pueden editar ejercicios personalizados");
+      await database.exerciseDefinitions.update(exerciseDefinitionId, {
+        ...parsed,
+        category: categoryForEquipment(parsed.equipment),
+        updatedAt: new Date().toISOString(),
+      });
+    });
   },
 
   async setArchived(

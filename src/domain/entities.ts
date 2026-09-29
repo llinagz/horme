@@ -25,6 +25,28 @@ export type ExerciseCategory =
   | "monoestructural"
   | "material-funcional";
 
+export type MuscleGroup =
+  | "hombro"
+  | "pecho"
+  | "espalda"
+  | "biceps"
+  | "cuadriceps"
+  | "isquios"
+  | "gluteos"
+  | "gemelos"
+  | "core-acondicionamiento"
+  | "cuerpo-completo";
+
+export type Equipment =
+  | "barra"
+  | "mancuerna"
+  | "kettlebell"
+  | "trineo"
+  | "polea"
+  | "peso-corporal"
+  | "ergometro"
+  | "otro";
+
 export type ExerciseMetric =
   | "repetitions"
   | "weightKilograms"
@@ -36,7 +58,12 @@ export interface ExerciseDefinition {
   exerciseDefinitionId: string;
   name: string;
   englishAlias: string;
+  /** Legado de CrossFit: se conserva en los datos pero ya no se muestra. */
   category: ExerciseCategory;
+  /** Grupo principal: decide la sección del buscador. */
+  muscleGroup: MuscleGroup;
+  secondaryMuscleGroups: MuscleGroup[];
+  equipment: Equipment;
   metrics: ExerciseMetric[];
   origin: "built-in" | "custom";
   isArchived: boolean;

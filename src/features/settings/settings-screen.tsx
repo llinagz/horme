@@ -8,17 +8,14 @@ import {
   useState,
   useSyncExternalStore,
   type ChangeEvent,
-  type FormEvent,
 } from "react";
 import packageInfo from "../../../package.json";
-import type { ExerciseCategory, ExerciseMetric } from "@/domain/entities";
+import { groupBy } from "@/domain/collections";
+import type { ExerciseDefinition } from "@/domain/entities";
 import { getErrorMessage } from "@/domain/errors";
+import { classificationLabel } from "@/domain/exercises";
 import { formatShortDate } from "@/domain/format";
-import {
-  exerciseCategoryLabels,
-  exerciseMetricLabels,
-  toOptions,
-} from "@/domain/labels";
+import { muscleGroupLabels, toOptions } from "@/domain/labels";
 import {
   createBackup,
   getBackupFileName,
@@ -36,7 +33,11 @@ import {
   setThemePreference,
   type ThemePreference,
 } from "@/components/theme";
-import { useConfirm } from "@/components/ui/sheet";
+import {
+  CustomExerciseForm,
+  type ExerciseFormValues,
+} from "@/features/exercises/custom-exercise-form";
+import { Sheet, useConfirm } from "@/components/ui/sheet";
 import { InlineMessage, PageHeader, Segmented } from "@/components/ui/states";
 import { useAction, useToast } from "@/components/ui/toast";
 import styles from "./settings.module.css";
@@ -47,12 +48,18 @@ const themeOptions: Array<{ value: ThemePreference; label: string }> = [
   { value: "dark", label: "Mármol negro" },
 ];
 
-const metricOptions = (
-  Object.keys(exerciseMetricLabels) as ExerciseMetric[]
-).map((metric) => ({
-  value: metric,
-  label: exerciseMetricLabels[metric].label,
-}));
+const muscleGroupOrder = toOptions(muscleGroupLabels);
+
+function toFormValues(exercise: ExerciseDefinition): ExerciseFormValues {
+  return {
+    name: exercise.name,
+    englishAlias: exercise.englishAlias,
+    muscleGroup: exercise.muscleGroup,
+    secondaryMuscleGroups: exercise.secondaryMuscleGroups,
+    equipment: exercise.equipment,
+    metrics: exercise.metrics,
+  };
+}
 
 const subscribeToNothing = () => () => {};
 
@@ -79,6 +86,10 @@ export function SettingsScreen() {
       (item) => item.origin === "custom",
     ),
   );
+  const customExercisesByGroup = groupBy(
+    customExercises ?? [],
+    (exercise) => exercise.muscleGroup,
+  );
   // El tema vive en localStorage: se lee sin efecto y sin romper la hidratación.
   const storedTheme = useSyncExternalStore(
     subscribeToNothing,
@@ -98,10 +109,8 @@ export function SettingsScreen() {
   const [isStoragePersistent, setIsStoragePersistent] = useState<
     boolean | null
   >(null);
-  const [selectedMetrics, setSelectedMetrics] = useState<ExerciseMetric[]>([
-    "repetitions",
-    "weightKilograms",
-  ]);
+  const [editedExercise, setEditedExercise] =
+    useState<ExerciseDefinition | null>(null);
 
   useEffect(() => {
     if ("storage" in navigator && "persisted" in navigator.storage)
@@ -166,28 +175,6 @@ export function SettingsScreen() {
     if (restored) {
       show({ message: "Copia restaurada" });
       router.replace("/");
-    }
-  };
-
-  const createExercise = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const data = new FormData(form);
-    const created = await run(
-      async () => {
-        await exerciseDefinitionRepository.createCustom({
-          name: String(data.get("name") ?? ""),
-          englishAlias: String(data.get("englishAlias") ?? ""),
-          category: String(data.get("category")) as ExerciseCategory,
-          metrics: selectedMetrics,
-        });
-        return true;
-      },
-      { success: "Ejercicio creado" },
-    );
-    if (created) {
-      form.reset();
-      setSelectedMetrics(["repetitions", "weightKilograms"]);
     }
   };
 
@@ -310,88 +297,98 @@ export function SettingsScreen() {
 
       <section className="sheet-card">
         <h2 className="heading">Ejercicios propios</h2>
-        <form
-          className="stack"
-          onSubmit={(event) => void createExercise(event)}
-        >
-          <div className="field-row">
-            <label className="field">
-              <span>Nombre</span>
-              <input name="name" required maxLength={60} />
-            </label>
-            <label className="field">
-              <span>Nombre en inglés</span>
-              <input
-                name="englishAlias"
-                maxLength={60}
-                placeholder="Opcional"
-              />
-            </label>
-          </div>
-          <label className="field">
-            <span>Categoría</span>
-            <select name="category" defaultValue="material-funcional">
-              {toOptions(exerciseCategoryLabels).map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <fieldset className={styles.metrics}>
-            <legend className="field-label">Qué vas a apuntar</legend>
-            {metricOptions.map((option) => (
-              <label className="toggle" key={option.value}>
-                <input
-                  type="checkbox"
-                  checked={selectedMetrics.includes(option.value)}
-                  onChange={(event) =>
-                    setSelectedMetrics((current) =>
-                      event.target.checked
-                        ? [...current, option.value]
-                        : current.filter((item) => item !== option.value),
-                    )
-                  }
-                />
-                <span>{option.label}</span>
-              </label>
-            ))}
-          </fieldset>
-          <button type="submit" className="button">
-            Crear ejercicio
-          </button>
-        </form>
-        {customExercises && customExercises.length > 0 ? (
-          <div className="list">
-            {customExercises.map((exercise) => (
-              <div key={exercise.exerciseDefinitionId} className="list-row">
-                <div>
-                  <strong>{exercise.name}</strong>
-                  <p>
-                    {exercise.isArchived
-                      ? "Archivado, no aparece al añadir ejercicios"
-                      : exerciseCategoryLabels[exercise.category]}
-                  </p>
+        <CustomExerciseForm
+          submitLabel="Crear ejercicio"
+          onSubmit={async (exercise) => {
+            await exerciseDefinitionRepository.createCustom(exercise);
+            show({ message: "Ejercicio creado" });
+          }}
+        />
+        {customExercises && customExercises.length > 0
+          ? muscleGroupOrder.map(({ value: group, label }) => {
+              const items = customExercisesByGroup.get(group);
+              if (!items) return null;
+              return (
+                <div key={group} className="stack">
+                  <h3 className="field-label">{label}</h3>
+                  <div className="list">
+                    {items.map((exercise) => (
+                      <div
+                        key={exercise.exerciseDefinitionId}
+                        className="list-row"
+                      >
+                        <div>
+                          <strong>{exercise.name}</strong>
+                          <p>
+                            {exercise.isArchived
+                              ? "Archivado, no aparece al añadir ejercicios"
+                              : classificationLabel(exercise)}
+                          </p>
+                        </div>
+                        <div className={styles.rowActions}>
+                          <button
+                            type="button"
+                            className="button quiet"
+                            aria-label={`Editar ${exercise.name}`}
+                            onClick={() => setEditedExercise(exercise)}
+                          >
+                            Editar
+                          </button>
+                          <button
+                            type="button"
+                            className="button quiet"
+                            aria-label={`${exercise.isArchived ? "Recuperar" : "Archivar"} ${exercise.name}`}
+                            onClick={() =>
+                              void run(() =>
+                                exerciseDefinitionRepository.setArchived(
+                                  exercise.exerciseDefinitionId,
+                                  !exercise.isArchived,
+                                ),
+                              )
+                            }
+                          >
+                            {exercise.isArchived ? "Recuperar" : "Archivar"}
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                <button
-                  type="button"
-                  className="button quiet"
-                  onClick={() =>
-                    void run(() =>
-                      exerciseDefinitionRepository.setArchived(
-                        exercise.exerciseDefinitionId,
-                        !exercise.isArchived,
-                      ),
-                    )
-                  }
-                >
-                  {exercise.isArchived ? "Recuperar" : "Archivar"}
-                </button>
-              </div>
-            ))}
-          </div>
-        ) : null}
+              );
+            })
+          : null}
       </section>
+
+      <Sheet
+        open={editedExercise !== null}
+        title="Editar ejercicio"
+        onClose={() => setEditedExercise(null)}
+      >
+        {editedExercise ? (
+          <CustomExerciseForm
+            key={editedExercise.exerciseDefinitionId}
+            initialValues={toFormValues(editedExercise)}
+            canEditMetrics={false}
+            submitLabel="Guardar cambios"
+            onCancel={() => setEditedExercise(null)}
+            onSubmit={async (exercise) => {
+              // Las métricas no se editan: cambiarlas dejaría huérfanas las series.
+              await exerciseDefinitionRepository.updateCustom(
+                editedExercise.exerciseDefinitionId,
+                {
+                  name: exercise.name,
+                  englishAlias: exercise.englishAlias,
+                  muscleGroup: exercise.muscleGroup,
+                  secondaryMuscleGroups: exercise.secondaryMuscleGroups,
+                  equipment: exercise.equipment,
+                },
+              );
+              setEditedExercise(null);
+              show({ message: "Ejercicio actualizado" });
+            }}
+          />
+        ) : null}
+      </Sheet>
 
       <section className="section">
         <h2 className="heading">Almacenamiento</h2>

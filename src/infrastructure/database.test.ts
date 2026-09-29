@@ -65,4 +65,66 @@ describe("migraciones", () => {
     upgraded.close();
     await Dexie.delete(name);
   });
+
+  it("v5 clasifica los ejercicios de una base v4 y conserva su historial", async () => {
+    const name = `migration-${crypto.randomUUID()}`;
+    const legacy = new Dexie(name);
+    legacy.version(4).stores({
+      athleteProfiles: "athleteProfileId, updatedAt",
+      bodyMeasurements: "bodyMeasurementId, measurementDate, updatedAt",
+      exerciseDefinitions: "exerciseDefinitionId, name, category, origin",
+      trainingSessions: "trainingSessionId, sessionDate, status, updatedAt",
+      trainingBlocks:
+        "trainingBlockId, trainingSessionId, type, [trainingSessionId+position]",
+      exerciseMovements:
+        "exerciseMovementId, trainingBlockId, exerciseDefinitionId, [trainingBlockId+position]",
+      setRecords:
+        "setRecordId, exerciseMovementId, [exerciseMovementId+position]",
+      applicationMetadata: "key",
+    });
+    const timestamp = "2026-01-01T00:00:00.000Z";
+    const oldShape = {
+      exerciseDefinitionId: "built-in-003",
+      name: "Peso muerto",
+      englishAlias: "Deadlift",
+      category: "fuerza-halterofilia",
+      metrics: ["repetitions", "weightKilograms"],
+      origin: "built-in",
+      isArchived: false,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    };
+    await legacy.table("exerciseDefinitions").bulkAdd([
+      oldShape,
+      {
+        ...oldShape,
+        exerciseDefinitionId: "custom-1",
+        name: "Remo en TRX",
+        englishAlias: "",
+        category: "material-funcional",
+        origin: "custom",
+      },
+    ]);
+    legacy.close();
+
+    const upgraded = new HormeDatabase(name);
+    await upgraded.open();
+    expect(upgraded.verno).toBeGreaterThanOrEqual(5);
+    expect(
+      await upgraded.exerciseDefinitions.get("built-in-003"),
+    ).toMatchObject({
+      name: "Peso muerto convencional",
+      muscleGroup: "espalda",
+      secondaryMuscleGroups: ["isquios", "gluteos"],
+      equipment: "barra",
+    });
+    expect(await upgraded.exerciseDefinitions.get("custom-1")).toMatchObject({
+      name: "Remo en TRX",
+      muscleGroup: "cuerpo-completo",
+      secondaryMuscleGroups: [],
+      equipment: "otro",
+    });
+    upgraded.close();
+    await Dexie.delete(name);
+  });
 });

@@ -14,30 +14,41 @@ import {
   bodyMeasurementSchema,
   exerciseDefinitionSchema,
   exerciseMovementSchema,
+  legacyExerciseDefinitionSchema,
   setRecordSchema,
   trainingBlockSchema,
   trainingSessionSchema,
 } from "@/domain/schemas";
-import { database, initializeDatabase } from "./database";
+import { database, initializeDatabase, seedBuiltInExercises } from "./database";
+import { applyCatalogMetadata } from "./exercise-catalog";
 
-export const backupSchema = z.strictObject({
-  format: z.literal("horme-backup"),
-  schemaVersion: z.literal(1),
-  exportedAt: z.iso.datetime(),
-  collections: z.strictObject({
-    athleteProfiles: z.array(athleteProfileSchema).max(1),
-    bodyMeasurements: z.array(bodyMeasurementSchema),
-    exerciseDefinitions: z.array(exerciseDefinitionSchema),
-    trainingSessions: z.array(trainingSessionSchema),
-    trainingBlocks: z.array(trainingBlockSchema),
-    exerciseMovements: z.array(exerciseMovementSchema),
-    setRecords: z.array(setRecordSchema),
-  }),
-});
+function backupSchemaFor<Version extends 1 | 2, Exercise extends z.ZodType>(
+  schemaVersion: Version,
+  exerciseSchema: Exercise,
+) {
+  return z.strictObject({
+    format: z.literal("horme-backup"),
+    schemaVersion: z.literal(schemaVersion),
+    exportedAt: z.iso.datetime(),
+    collections: z.strictObject({
+      athleteProfiles: z.array(athleteProfileSchema).max(1),
+      bodyMeasurements: z.array(bodyMeasurementSchema),
+      exerciseDefinitions: z.array(exerciseSchema),
+      trainingSessions: z.array(trainingSessionSchema),
+      trainingBlocks: z.array(trainingBlockSchema),
+      exerciseMovements: z.array(exerciseMovementSchema),
+      setRecords: z.array(setRecordSchema),
+    }),
+  });
+}
+
+export const backupSchema = backupSchemaFor(2, exerciseDefinitionSchema);
+/** Copias v1, anteriores a los grupos musculares; se migran al importarlas. */
+const legacyBackupSchema = backupSchemaFor(1, legacyExerciseDefinitionSchema);
 
 export interface HormeBackup {
   format: "horme-backup";
-  schemaVersion: 1;
+  schemaVersion: 2;
   exportedAt: string;
   collections: {
     athleteProfiles: AthleteProfile[];
@@ -132,10 +143,36 @@ function validateReferences(backup: HormeBackup): void {
     throw new Error("Hay series sin un movimiento válido");
 }
 
+function isLegacyBackup(value: unknown): boolean {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "schemaVersion" in value &&
+    value.schemaVersion === 1
+  );
+}
+
+function upgradeLegacyBackup(
+  legacy: z.infer<typeof legacyBackupSchema>,
+): HormeBackup {
+  const upgraded = {
+    ...legacy,
+    schemaVersion: 2,
+    collections: {
+      ...legacy.collections,
+      exerciseDefinitions:
+        legacy.collections.exerciseDefinitions.map(applyCatalogMetadata),
+    },
+  };
+  return upgraded as HormeBackup;
+}
+
 export function parseBackup(value: unknown): HormeBackup {
   // Con `exactOptionalPropertyTypes` Zod infiere `campo?: T | undefined`; el
   // esquema estricto garantiza que la forma coincide con las entidades.
-  const backup = backupSchema.parse(value) as HormeBackup;
+  const backup = isLegacyBackup(value)
+    ? upgradeLegacyBackup(legacyBackupSchema.parse(value))
+    : (backupSchema.parse(value) as HormeBackup);
   validateReferences(backup);
   return backup;
 }
@@ -167,7 +204,7 @@ export async function createBackup(): Promise<HormeBackup> {
   await initializeDatabase();
   const backup = await database.transaction("r", database.tables, async () => ({
     format: "horme-backup" as const,
-    schemaVersion: 1 as const,
+    schemaVersion: 2 as const,
     exportedAt: new Date().toISOString(),
     collections: {
       athleteProfiles: await database.athleteProfiles.toArray(),
@@ -197,6 +234,8 @@ export async function replaceDatabaseFromBackup(value: unknown): Promise<void> {
     await database.exerciseMovements.bulkAdd(collections.exerciseMovements);
     await database.setRecords.bulkAdd(collections.setRecords);
   });
+  // Una copia antigua no trae los ejercicios que el catálogo añadió después.
+  await seedBuiltInExercises();
 }
 
 export async function markBackupCreated(exportedAt: string): Promise<void> {
