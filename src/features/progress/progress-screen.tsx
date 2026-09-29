@@ -2,11 +2,14 @@
 
 import Link from "next/link";
 import { useLiveQuery } from "dexie-react-hooks";
+import { Plus } from "lucide-react";
+import { useState } from "react";
 import { listExerciseProgress } from "@/application/progress";
 import { getSessionWellbeingTrend } from "@/domain/calculations";
 import { groupBy } from "@/domain/collections";
 import { normalizeWodName } from "@/domain/dates";
-import { formatNumber, formatShortDate } from "@/domain/format";
+import type { ExerciseDefinition } from "@/domain/entities";
+import { formatNumber, formatShortDate, pluralize } from "@/domain/format";
 import { wodFormatLabels } from "@/domain/labels";
 import { trainingSessionRepository } from "@/infrastructure/repositories/training-session-repository";
 import { useBodyMeasurements } from "@/components/data-hooks";
@@ -17,9 +20,19 @@ import {
   LoadingState,
   PageHeader,
 } from "@/components/ui/states";
+import { ExercisePicker } from "@/features/session/exercise-picker";
+import { KnownLiftSheet } from "./known-lift-form";
 import styles from "./progress.module.css";
 
+/** Solo tiene sentido registrar una marca en ejercicios que llevan carga. */
+const hasLoad = (exercise: ExerciseDefinition) =>
+  exercise.metrics.includes("weightKilograms");
+
 export function ProgressScreen() {
+  const [isPicking, setIsPicking] = useState(false);
+  const [liftExercise, setLiftExercise] = useState<ExerciseDefinition | null>(
+    null,
+  );
   const exerciseProgress = useLiveQuery(() => listExerciseProgress());
   const sessions = useLiveQuery(() => trainingSessionRepository.list());
   const wodHistory = useLiveQuery(() =>
@@ -53,11 +66,21 @@ export function ProgressScreen() {
       <PageHeader title="Progreso" />
 
       <section className="section">
-        <h2 className="heading">Ejercicios</h2>
+        <div className="section-head">
+          <h2 className="heading">Ejercicios</h2>
+          <button
+            type="button"
+            className="button"
+            onClick={() => setIsPicking(true)}
+          >
+            <Plus aria-hidden="true" />
+            Registrar marca
+          </button>
+        </div>
         {exerciseProgress.length === 0 ? (
           <EmptyState
             title="El progreso empieza con una serie"
-            description="Completa una serie en una sesión y aquí verás la ficha del ejercicio."
+            description="Completa una serie en una sesión o registra un peso que ya conozcas, y aquí verás la ficha del ejercicio."
           />
         ) : (
           <div className="list">
@@ -72,7 +95,13 @@ export function ProgressScreen() {
                   <p>
                     {summary.estimatedOneRepMaxKilograms !== undefined
                       ? `1RM estimado ${formatNumber(Math.round(summary.estimatedOneRepMaxKilograms))} kg`
-                      : `${summary.completedSetCount} series registradas`}
+                      : summary.completedSetCount > 0
+                        ? `${summary.completedSetCount} series registradas`
+                        : pluralize(
+                            summary.knownLiftCount,
+                            "marca registrada",
+                            "marcas registradas",
+                          )}
                   </p>
                 </div>
                 {summary.maximumActualWeightKilograms !== undefined ? (
@@ -147,6 +176,20 @@ export function ProgressScreen() {
           })}
         </section>
       ) : null}
+
+      <ExercisePicker
+        open={isPicking}
+        filter={hasLoad}
+        onClose={() => setIsPicking(false)}
+        onPick={(exercise) => {
+          setIsPicking(false);
+          setLiftExercise(exercise);
+        }}
+      />
+      <KnownLiftSheet
+        exercise={liftExercise}
+        onClose={() => setLiftExercise(null)}
+      />
     </div>
   );
 }

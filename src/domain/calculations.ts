@@ -1,4 +1,9 @@
-import type { BodyMeasurement, SetRecord, TrainingSession } from "./entities";
+import type {
+  BodyMeasurement,
+  KnownLift,
+  SetRecord,
+  TrainingSession,
+} from "./entities";
 
 export interface CurrentBodyValues {
   heightCentimeters?: number;
@@ -99,6 +104,60 @@ export function summarizeExercisePerformance(
       : {}),
     totalVolumeKilograms,
     completedSetCount,
+  };
+}
+
+/**
+ * Fechadas de la más reciente a la más antigua y, al final, las que el usuario
+ * no sabe fechar. La primera es la marca de referencia.
+ */
+export function sortKnownLifts(lifts: KnownLift[]): KnownLift[] {
+  return lifts.toSorted((left, right) => {
+    if (left.recordDate === undefined && right.recordDate === undefined)
+      return right.updatedAt.localeCompare(left.updatedAt);
+    if (left.recordDate === undefined) return 1;
+    if (right.recordDate === undefined) return -1;
+    return (
+      right.recordDate.localeCompare(left.recordDate) ||
+      right.updatedAt.localeCompare(left.updatedAt)
+    );
+  });
+}
+
+/**
+ * Combina las marcas registradas con el resumen de las sesiones: solo pueden
+ * subir la carga máxima y el 1RM. No suman volumen ni series, porque no son
+ * entrenamiento registrado.
+ */
+export function mergeKnownLifts(
+  summary: ExercisePerformanceSummary,
+  lifts: KnownLift[],
+): ExercisePerformanceSummary {
+  let maximumActualWeightKilograms = summary.maximumActualWeightKilograms;
+  let estimatedOneRepMaxKilograms = summary.estimatedOneRepMaxKilograms;
+  for (const lift of lifts) {
+    maximumActualWeightKilograms = Math.max(
+      maximumActualWeightKilograms ?? 0,
+      lift.weightKilograms,
+    );
+    const estimate = calculateEstimatedOneRepMax(
+      lift.repetitions,
+      lift.weightKilograms,
+    );
+    if (estimate !== undefined)
+      estimatedOneRepMaxKilograms = Math.max(
+        estimatedOneRepMaxKilograms ?? 0,
+        estimate,
+      );
+  }
+  return {
+    ...summary,
+    ...(maximumActualWeightKilograms !== undefined
+      ? { maximumActualWeightKilograms }
+      : {}),
+    ...(estimatedOneRepMaxKilograms !== undefined
+      ? { estimatedOneRepMaxKilograms }
+      : {}),
   };
 }
 

@@ -9,6 +9,7 @@ import {
 import { createBackup, parseBackup } from "./backup";
 import { database } from "./database";
 import { exerciseDefinitionRepository } from "./repositories/exercise-definition-repository";
+import { knownLiftRepository } from "./repositories/known-lift-repository";
 import { trainingSessionRepository } from "./repositories/training-session-repository";
 
 beforeEach(async () => {
@@ -193,6 +194,14 @@ describe("las escrituras nunca dejan datos que la copia no pueda restaurar", () 
         rounds: numberArbitrary,
         duration: numberArbitrary,
       }),
+      fc.record({
+        kind: fc.constantFrom("lift" as const, "liftEdit" as const),
+        weight: numberArbitrary,
+        repetitions: numberArbitrary,
+        date: fc.option(dateArbitrary, { nil: undefined }),
+        notes: fc.option(fc.string({ maxLength: 300 }), { nil: undefined }),
+      }),
+      fc.constant({ kind: "liftRemove" as const }),
     );
 
     await fc.assert(
@@ -269,6 +278,35 @@ describe("las escrituras nunca dejan datos que la copia no pueda restaurar", () 
                   }),
                 );
                 break;
+              case "lift":
+              case "liftEdit": {
+                const input = {
+                  exerciseDefinitionId: "test-deadlift",
+                  weightKilograms: operation.weight ?? Number.NaN,
+                  repetitions: operation.repetitions ?? Number.NaN,
+                  ...(operation.date !== undefined
+                    ? { recordDate: operation.date }
+                    : {}),
+                  ...(operation.notes !== undefined
+                    ? { notes: operation.notes }
+                    : {}),
+                };
+                const [existing] =
+                  await knownLiftRepository.listByExercise("test-deadlift");
+                if (operation.kind === "liftEdit" && existing)
+                  await attempt(() =>
+                    knownLiftRepository.update(existing.knownLiftId, input),
+                  );
+                else await attempt(() => knownLiftRepository.create(input));
+                break;
+              }
+              case "liftRemove": {
+                const [existing] =
+                  await knownLiftRepository.listByExercise("test-deadlift");
+                if (existing)
+                  await knownLiftRepository.remove(existing.knownLiftId);
+                break;
+              }
             }
           }
           const backup: unknown = JSON.parse(

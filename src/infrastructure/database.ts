@@ -5,6 +5,7 @@ import type {
   BodyMeasurement,
   ExerciseDefinition,
   ExerciseMovement,
+  KnownLift,
   SetRecord,
   TrainingBlock,
   TrainingSession,
@@ -23,6 +24,7 @@ export class HormeDatabase extends Dexie {
   trainingBlocks!: EntityTable<TrainingBlock, "trainingBlockId">;
   exerciseMovements!: EntityTable<ExerciseMovement, "exerciseMovementId">;
   setRecords!: EntityTable<SetRecord, "setRecordId">;
+  knownLifts!: EntityTable<KnownLift, "knownLiftId">;
   applicationMetadata!: EntityTable<ApplicationMetadata, "key">;
 
   constructor(databaseName = "HormeDatabase") {
@@ -77,6 +79,9 @@ export class HormeDatabase extends Dexie {
             Object.assign(exercise, applyCatalogMetadata(exercise));
           });
       });
+    this.version(6).stores({
+      knownLifts: "knownLiftId, exerciseDefinitionId, recordDate, updatedAt",
+    });
   }
 }
 

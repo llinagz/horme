@@ -3,9 +3,11 @@ import {
   calculateEstimatedOneRepMax,
   calculateSessionVolume,
   getCurrentBodyValues,
+  mergeKnownLifts,
+  sortKnownLifts,
   summarizeExercisePerformance,
 } from "./calculations";
-import type { BodyMeasurement, SetRecord } from "./entities";
+import type { BodyMeasurement, KnownLift, SetRecord } from "./entities";
 import { getRecordedSets } from "@/application/progress";
 import type { ExerciseHistoryEntry } from "@/infrastructure/repositories/training-session-repository";
 
@@ -22,6 +24,64 @@ function createSet(overrides: Partial<SetRecord>): SetRecord {
     ...overrides,
   };
 }
+
+function createLift(overrides: Partial<KnownLift>): KnownLift {
+  return {
+    knownLiftId: crypto.randomUUID(),
+    exerciseDefinitionId: "test-deadlift",
+    weightKilograms: 100,
+    repetitions: 5,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    ...overrides,
+  };
+}
+
+describe("marcas registradas", () => {
+  it("ordena las fechadas de más reciente a más antigua y las sin fecha al final", () => {
+    const undated = createLift({ weightKilograms: 1 });
+    const old = createLift({ weightKilograms: 2, recordDate: "2026-01-01" });
+    const recent = createLift({ weightKilograms: 3, recordDate: "2026-06-01" });
+    expect(sortKnownLifts([undated, old, recent])).toEqual([
+      recent,
+      old,
+      undated,
+    ]);
+  });
+
+  it("sube la carga máxima y el 1RM sin tocar volumen ni series", () => {
+    const summary = summarizeExercisePerformance([
+      createSet({ repetitions: 5, weightKilograms: 80 }),
+    ]);
+    const merged = mergeKnownLifts(summary, [
+      createLift({ weightKilograms: 100, repetitions: 5 }),
+      createLift({ weightKilograms: 60, repetitions: 20 }),
+    ]);
+    expect(merged.maximumActualWeightKilograms).toBe(100);
+    expect(merged.estimatedOneRepMaxKilograms).toBeCloseTo(116.67, 2);
+    expect(merged.totalVolumeKilograms).toBe(400);
+    expect(merged.completedSetCount).toBe(1);
+  });
+
+  it("no baja los valores de las sesiones", () => {
+    const summary = summarizeExercisePerformance([
+      createSet({ repetitions: 1, weightKilograms: 150 }),
+    ]);
+    const merged = mergeKnownLifts(summary, [
+      createLift({ weightKilograms: 50, repetitions: 15 }),
+    ]);
+    expect(merged.maximumActualWeightKilograms).toBe(150);
+    expect(merged.estimatedOneRepMaxKilograms).toBe(150);
+  });
+
+  it("con solo marcas de muchas repeticiones no inventa un 1RM", () => {
+    const merged = mergeKnownLifts(summarizeExercisePerformance([]), [
+      createLift({ weightKilograms: 50, repetitions: 15 }),
+    ]);
+    expect(merged.maximumActualWeightKilograms).toBe(50);
+    expect(merged).not.toHaveProperty("estimatedOneRepMaxKilograms");
+  });
+});
 
 describe("cálculos de progreso", () => {
   it("usa la carga real para una repetición y Epley de 2 a 10", () => {

@@ -25,6 +25,20 @@ export const localDateSchema = z
   .string()
   .refine(isLocalDate, "La fecha no es válida");
 
+export const liftWeightKilogramsSchema = z
+  .number()
+  .gt(0, "El peso debe ser mayor que 0")
+  .max(500, "El peso máximo es 500 kg");
+export const liftRepetitionsSchema = z
+  .number()
+  .int("Las repeticiones deben ser un número entero")
+  .min(1, "Indica al menos 1 repetición")
+  .max(100, "El máximo es 100 repeticiones");
+export const liftNotesSchema = z
+  .string()
+  .trim()
+  .max(200, "La nota no puede superar 200 caracteres");
+
 export const onboardingInputSchema = z.object({
   displayName: displayNameSchema,
   measurementDate: localDateSchema,
@@ -35,4 +49,12 @@ export const onboardingInputSchema = z.object({
 export const bodyMeasurementInputSchema = z.strictObject({
   measurementDate: localDateSchema,
   weightKilograms: weightKilogramsSchema,
+});
+
+export const knownLiftInputSchema = z.strictObject({
+  exerciseDefinitionId: z.string().min(1),
+  weightKilograms: liftWeightKilogramsSchema,
+  repetitions: liftRepetitionsSchema,
+  recordDate: localDateSchema.optional(),
+  notes: liftNotesSchema.optional(),
 });

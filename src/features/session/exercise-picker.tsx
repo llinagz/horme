@@ -60,15 +60,25 @@ export function ExercisePicker({
   open,
   onClose,
   onPick,
+  filter,
 }: {
   open: boolean;
   onClose: () => void;
   onPick: (exercise: ExerciseDefinition) => void;
+  /** Limita los ejercicios que se ofrecen; debe ser una función estable. */
+  filter?: (exercise: ExerciseDefinition) => boolean;
 }) {
   const [query, setQuery] = useState("");
   const [equipment, setEquipment] = useState<Equipment | undefined>();
   const [newExerciseName, setNewExerciseName] = useState<string | null>(null);
-  const exercises = useLiveQuery(() => exerciseDefinitionRepository.list(), []);
+  const allExercises = useLiveQuery(
+    () => exerciseDefinitionRepository.list(),
+    [],
+  );
+  const exercises = useMemo(
+    () => (filter ? allExercises?.filter(filter) : allExercises),
+    [allExercises, filter],
+  );
   const recentIds = useLiveQuery(
     async () =>
       (await listExerciseProgress())

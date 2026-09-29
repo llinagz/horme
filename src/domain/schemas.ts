@@ -2,6 +2,9 @@ import { z } from "zod";
 import {
   displayNameSchema,
   heightCentimetersSchema,
+  liftNotesSchema,
+  liftRepetitionsSchema,
+  liftWeightKilogramsSchema,
   localDateSchema,
   weightKilogramsSchema,
 } from "./validation";
@@ -197,6 +200,17 @@ export const bodyMeasurementSchema = z
       measurement.weightKilograms !== undefined,
     "La medición necesita altura o peso",
   );
+
+export const knownLiftSchema = z.strictObject({
+  knownLiftId: z.uuid(),
+  exerciseDefinitionId: z.string().min(1),
+  weightKilograms: liftWeightKilogramsSchema,
+  repetitions: liftRepetitionsSchema,
+  recordDate: localDateSchema.optional(),
+  notes: liftNotesSchema.optional(),
+  createdAt: timestampSchema,
+  updatedAt: timestampSchema,
+});
 
 export const exerciseDefinitionSchema = z
   .strictObject({
