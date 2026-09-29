@@ -21,6 +21,9 @@ async function addTestExercise(): Promise<ExerciseDefinition> {
     name: "Peso muerto",
     englishAlias: "Deadlift",
     category: "fuerza-halterofilia",
+    muscleGroup: "espalda",
+    secondaryMuscleGroups: [],
+    equipment: "barra",
     metrics: ["repetitions", "weightKilograms"],
     origin: "built-in",
     isArchived: false,
@@ -270,7 +273,9 @@ describe("copias", () => {
       "Javier",
     );
     expect(await database.trainingSessions.count()).toBe(1);
-    expect(await database.exerciseDefinitions.count()).toBe(1);
+    expect(
+      await database.exerciseDefinitions.get("test-deadlift"),
+    ).toBeDefined();
   });
 
   it("rechaza referencias rotas antes de modificar la base", async () => {

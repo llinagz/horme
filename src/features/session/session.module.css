@@ -336,6 +336,11 @@
   outline: none;
 }
 
+.pickerEmpty {
+  display: grid;
+  gap: var(--space-3);
+}
+
 .pickerGroup {
   display: grid;
   gap: var(--space-1);

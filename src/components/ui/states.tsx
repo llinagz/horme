@@ -97,6 +97,44 @@ export function Figure({
   );
 }
 
+/** Elección múltiple entre pocas opciones, con el aspecto del control segmentado. */
+export function ToggleGroup<T extends string>({
+  label,
+  options,
+  values,
+  onChange,
+}: {
+  label: string;
+  options: Array<{ value: T; label: string; disabled?: boolean }>;
+  values: T[];
+  onChange: (values: T[]) => void;
+}) {
+  return (
+    <div className="segmented" role="group" aria-label={label}>
+      {options.map((option) => {
+        const isPressed = values.includes(option.value);
+        return (
+          <button
+            key={option.value}
+            type="button"
+            aria-pressed={isPressed}
+            disabled={option.disabled ?? false}
+            onClick={() =>
+              onChange(
+                isPressed
+                  ? values.filter((value) => value !== option.value)
+                  : [...values, option.value],
+              )
+            }
+          >
+            {option.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 /** Elección única entre pocas opciones, operable con el pulgar. */
 export function Segmented<T extends string | number>({
   label,

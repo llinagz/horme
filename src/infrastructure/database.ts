@@ -9,7 +9,11 @@ import type {
   TrainingBlock,
   TrainingSession,
 } from "@/domain/entities";
-import { createBuiltInExercises } from "./exercise-catalog";
+import {
+  applyCatalogMetadata,
+  createBuiltInExercises,
+  type ExerciseWithoutMuscleGroups,
+} from "./exercise-catalog";
 
 export class HormeDatabase extends Dexie {
   athleteProfiles!: EntityTable<AthleteProfile, "athleteProfileId">;
@@ -59,6 +63,19 @@ export class HormeDatabase extends Dexie {
               updatedAt: new Date().toISOString(),
             });
         }
+      });
+    this.version(5)
+      .stores({
+        exerciseDefinitions:
+          "exerciseDefinitionId, name, category, origin, muscleGroup, equipment",
+      })
+      .upgrade(async (transaction) => {
+        await transaction
+          .table<ExerciseWithoutMuscleGroups, string>("exerciseDefinitions")
+          .toCollection()
+          .modify((exercise) => {
+            Object.assign(exercise, applyCatalogMetadata(exercise));
+          });
       });
   }
 }

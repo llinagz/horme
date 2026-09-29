@@ -23,6 +23,28 @@ export const exerciseCategories = [
   "monoestructural",
   "material-funcional",
 ] as const;
+export const muscleGroups = [
+  "hombro",
+  "pecho",
+  "espalda",
+  "biceps",
+  "cuadriceps",
+  "isquios",
+  "gluteos",
+  "gemelos",
+  "core-acondicionamiento",
+  "cuerpo-completo",
+] as const;
+export const equipments = [
+  "barra",
+  "mancuerna",
+  "kettlebell",
+  "trineo",
+  "polea",
+  "peso-corporal",
+  "ergometro",
+  "otro",
+] as const;
 export const exerciseMetrics = [
   "repetitions",
   "weightKilograms",
@@ -106,18 +128,49 @@ export const setRecordChangesSchema = setValuesSchema.extend({
   isCompleted: z.boolean().optional(),
 });
 
-export const customExerciseInputSchema = z.strictObject({
+const secondaryMuscleGroupsSchema = z.array(z.enum(muscleGroups));
+
+/** Los secundarios no pueden repetirse ni incluir el grupo principal. */
+function hasValidSecondaryGroups(exercise: {
+  muscleGroup: string;
+  secondaryMuscleGroups: string[];
+}): boolean {
+  return (
+    new Set(exercise.secondaryMuscleGroups).size ===
+      exercise.secondaryMuscleGroups.length &&
+    !exercise.secondaryMuscleGroups.includes(exercise.muscleGroup)
+  );
+}
+const secondaryGroupsMessage =
+  "Los grupos secundarios no pueden repetirse ni incluir el principal";
+
+const customExerciseObjectSchema = z.strictObject({
   name: z
     .string()
     .trim()
     .min(1, "El ejercicio necesita un nombre")
     .max(60, "El nombre no puede superar 60 caracteres"),
   englishAlias: z.string().trim().max(60),
-  category: z.enum(exerciseCategories),
+  muscleGroup: z.enum(muscleGroups),
+  secondaryMuscleGroups: secondaryMuscleGroupsSchema.default([]),
+  equipment: z.enum(equipments),
   metrics: z
     .array(z.enum(exerciseMetrics))
     .min(1, "Selecciona al menos una métrica"),
 });
+
+export const customExerciseInputSchema = customExerciseObjectSchema.refine(
+  hasValidSecondaryGroups,
+  { message: secondaryGroupsMessage, path: ["secondaryMuscleGroups"] },
+);
+
+/** Cambios que admite un ejercicio personalizado ya creado. */
+export const customExerciseChangesSchema = customExerciseObjectSchema
+  .omit({ metrics: true })
+  .refine(hasValidSecondaryGroups, {
+    message: secondaryGroupsMessage,
+    path: ["secondaryMuscleGroups"],
+  });
 
 // Entidades completas, tal y como se guardan y se exportan.
 
@@ -145,7 +198,28 @@ export const bodyMeasurementSchema = z
     "La medición necesita altura o peso",
   );
 
-export const exerciseDefinitionSchema = z.strictObject({
+export const exerciseDefinitionSchema = z
+  .strictObject({
+    exerciseDefinitionId: z.string().min(1),
+    name: z.string().min(1),
+    englishAlias: z.string(),
+    category: z.enum(exerciseCategories),
+    muscleGroup: z.enum(muscleGroups),
+    secondaryMuscleGroups: secondaryMuscleGroupsSchema,
+    equipment: z.enum(equipments),
+    metrics: z.array(z.enum(exerciseMetrics)).min(1),
+    origin: z.enum(["built-in", "custom"]),
+    isArchived: z.boolean(),
+    createdAt: timestampSchema,
+    updatedAt: timestampSchema,
+  })
+  .refine(hasValidSecondaryGroups, {
+    message: secondaryGroupsMessage,
+    path: ["secondaryMuscleGroups"],
+  });
+
+/** Ejercicio de una copia v1, anterior a los grupos musculares. */
+export const legacyExerciseDefinitionSchema = z.strictObject({
   exerciseDefinitionId: z.string().min(1),
   name: z.string().min(1),
   englishAlias: z.string(),

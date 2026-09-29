@@ -42,16 +42,11 @@
   font-weight: 600;
 }
 
-.metrics {
-  display: grid;
-  gap: 0;
-  margin: 0;
-  padding: 0;
-  border: 0;
-}
-
-.metrics legend {
-  margin-bottom: var(--space-1);
+.rowActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-1);
 }
 
 .footer {

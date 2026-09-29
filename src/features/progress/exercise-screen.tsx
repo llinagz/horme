@@ -7,8 +7,8 @@ import {
   getRecordedSets,
 } from "@/application/progress";
 import { summarizeExercisePerformance } from "@/domain/calculations";
+import { classificationLabel } from "@/domain/exercises";
 import { formatNumber, formatShortDate, pluralize } from "@/domain/format";
-import { exerciseCategoryLabels } from "@/domain/labels";
 import { exerciseDefinitionRepository } from "@/infrastructure/repositories/exercise-definition-repository";
 import { trainingSessionRepository } from "@/infrastructure/repositories/training-session-repository";
 import { LazyProgressChart } from "@/components/lazy-progress-chart";
@@ -80,6 +80,7 @@ export function ExerciseScreen() {
         title={exercise.name}
         subtitle={[
           exercise.englishAlias,
+          classificationLabel(exercise),
           pluralize(history.length, "sesión", "sesiones"),
         ]
           .filter(Boolean)
@@ -110,7 +111,6 @@ export function ExerciseScreen() {
         </section>
       ) : (
         <p className="muted">
-          {exerciseCategoryLabels[exercise.category]},{" "}
           {pluralize(
             summary.completedSetCount,
             "serie registrada",
