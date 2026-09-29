@@ -23,7 +23,6 @@ public/swe-worker-*.js
 
 # local assistant artifacts
 AGENTS.md
-CLAUDE.md
 codex/
 
 # environment files are intentionally unused by Hormé
