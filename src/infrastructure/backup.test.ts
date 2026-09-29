@@ -15,6 +15,7 @@ import {
   replaceDatabaseFromBackup,
 } from "./backup";
 import { database } from "./database";
+import { knownLiftRepository } from "./repositories/known-lift-repository";
 import { trainingSessionRepository } from "./repositories/training-session-repository";
 
 async function seed(): Promise<void> {
@@ -31,6 +32,11 @@ async function seed(): Promise<void> {
     repetitions: 5,
     weightKilograms: 100,
   });
+  await knownLiftRepository.create({
+    exerciseDefinitionId: "test-deadlift",
+    weightKilograms: 140,
+    repetitions: 3,
+  });
   const sessionId = await trainingSessionRepository.create("2026-08-09");
   const wodId = await trainingSessionRepository.addBlock(sessionId, "wod");
   await trainingSessionRepository.updateBlock(wodId, {
@@ -43,6 +49,15 @@ async function seed(): Promise<void> {
       additionalRepetitions: 3,
     },
   });
+}
+
+/** Colecciones como las de una copia anterior a las marcas registradas. */
+function withoutKnownLifts(
+  collections: Awaited<ReturnType<typeof createBackup>>["collections"],
+): Record<string, unknown> {
+  const rest: Record<string, unknown> = { ...collections };
+  delete rest.knownLifts;
+  return rest;
 }
 
 beforeEach(clearDatabase);
@@ -71,18 +86,73 @@ describe("copias", () => {
     );
   });
 
-  it("exporta con la versión 2, que incluye los grupos musculares", async () => {
+  it("exporta con la versión 3, que incluye las marcas registradas", async () => {
     await seed();
     const backup = await createBackup();
-    expect(backup.schemaVersion).toBe(2);
+    expect(backup.schemaVersion).toBe(3);
     expect(backup.collections.exerciseDefinitions[0]).toHaveProperty(
       "muscleGroup",
     );
+    expect(backup.collections.knownLifts).toMatchObject([
+      { exerciseDefinitionId: "test-deadlift", weightKilograms: 140 },
+    ]);
+  });
+
+  it("restaura una copia v2 anterior a las marcas registradas", async () => {
+    await seed();
+    const current = await createBackup();
+    const v2 = {
+      ...current,
+      schemaVersion: 2,
+      collections: withoutKnownLifts(current.collections),
+    };
+
+    expect(parseBackup(v2)).toMatchObject({
+      schemaVersion: 3,
+      collections: { knownLifts: [] },
+    });
+    await clearDatabase();
+    await replaceDatabaseFromBackup(v2);
+    expect(await database.knownLifts.count()).toBe(0);
+    expect(await database.trainingSessions.count()).toBe(2);
+  });
+
+  it("rechaza una v2 con marcas y una v3 sin ellas", async () => {
+    await seed();
+    const backup = await createBackup();
+    expect(() => parseBackup({ ...backup, schemaVersion: 2 })).toThrow();
+    expect(() =>
+      parseBackup({
+        ...backup,
+        collections: withoutKnownLifts(backup.collections),
+      }),
+    ).toThrow();
+  });
+
+  it("rechaza una marca de un ejercicio que no está en la copia", async () => {
+    await seed();
+    const backup = await createBackup();
+    expect(() =>
+      parseBackup({
+        ...backup,
+        collections: {
+          ...backup.collections,
+          knownLifts: backup.collections.knownLifts.map((lift) => ({
+            ...lift,
+            exerciseDefinitionId: "no-existe",
+          })),
+        },
+      }),
+    ).toThrow("Hay marcas sin un ejercicio válido");
   });
 
   it("restaura una copia v1 anterior a los grupos musculares", async () => {
     await seed();
-    const current = await createBackup();
+    const backup = await createBackup();
+    const current = {
+      ...backup,
+      collections: withoutKnownLifts(backup.collections),
+    };
     const legacy = {
       ...current,
       schemaVersion: 1,
@@ -118,7 +188,8 @@ describe("copias", () => {
     };
 
     const parsed = parseBackup(legacy);
-    expect(parsed.schemaVersion).toBe(2);
+    expect(parsed.schemaVersion).toBe(3);
+    expect(parsed.collections.knownLifts).toEqual([]);
     expect(parsed.collections.exerciseDefinitions).toMatchObject([
       {
         name: "Peso muerto convencional",
@@ -171,6 +242,7 @@ describe("copias", () => {
       displayName: "Javier",
       sessionCount: 2,
       measurementCount: 1,
+      knownLiftCount: 1,
       firstSessionDate: "2026-08-01",
       lastSessionDate: "2026-08-09",
     });
@@ -180,7 +252,7 @@ describe("copias", () => {
     await seed();
     const backup = await createBackup();
     expect(() => parseBackup({ ...backup, format: "otra-app" })).toThrow();
-    expect(() => parseBackup({ ...backup, schemaVersion: 3 })).toThrow();
+    expect(() => parseBackup({ ...backup, schemaVersion: 4 })).toThrow();
     expect(() => parseBackup({ ...backup, extra: true })).toThrow();
     expect(() =>
       parseBackup({

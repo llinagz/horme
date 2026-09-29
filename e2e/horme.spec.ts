@@ -104,3 +104,50 @@ test("onboarding, entrenamiento, medición, progreso, offline y copia", async ({
     .click();
   await expect(page.getByText("Historial vacío")).toBeVisible();
 });
+
+test("registrar una marca conocida sin sesión, verla en progreso y precargar la sesión", async ({
+  page,
+}) => {
+  await completeOnboarding(page);
+
+  await page
+    .getByRole("navigation")
+    .getByRole("link", { name: "Progreso" })
+    .click();
+  await expect(
+    page.getByText("El progreso empieza con una serie"),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Registrar marca" }).click();
+  await page.getByRole("searchbox").fill("peso muerto");
+  await page.getByRole("button", { name: /Peso muerto/ }).click();
+
+  const sheet = page.getByRole("dialog", { name: "Registrar marca" });
+  await sheet.getByLabel(/^Peso/).fill("100");
+  await sheet.getByLabel("Repeticiones").fill("5");
+  await sheet.getByRole("checkbox", { name: "No recuerdo la fecha" }).check();
+  await sheet.getByRole("button", { name: "Guardar marca" }).click();
+  await expect(page.getByText("Marca registrada").first()).toBeVisible();
+
+  // El ejercicio aparece en Progreso aunque nunca se haya entrenado.
+  const exerciseLink = page.getByRole("link", { name: /Peso muerto/ });
+  await expect(exerciseLink).toContainText("1RM estimado 117 kg");
+  await exerciseLink.click();
+  await expect(
+    page.getByRole("heading", { name: "Marcas registradas" }),
+  ).toBeVisible();
+  await expect(page.getByText("Sin fecha").first()).toBeVisible();
+  await expect(page.getByText("5 × 100 kg").first()).toBeVisible();
+
+  // La primera vez que se añade a una sesión, las series parten de la marca.
+  await page
+    .getByRole("navigation")
+    .getByRole("link", { name: "Inicio" })
+    .click();
+  await startStrengthSession(page, "peso muerto", /Peso muerto/);
+  await expect(
+    page.getByRole("button", { name: /^Completar Serie/ }),
+  ).toHaveCount(3);
+  await expect(page.getByLabel("Carga", { exact: true }).first()).toHaveValue(
+    "100",
+  );
+});

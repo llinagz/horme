@@ -127,4 +127,53 @@ describe("migraciones", () => {
     upgraded.close();
     await Dexie.delete(name);
   });
+
+  it("v6 añade las marcas registradas y conserva los datos de una base v5", async () => {
+    const name = `migration-${crypto.randomUUID()}`;
+    const legacy = new Dexie(name);
+    legacy.version(5).stores({
+      athleteProfiles: "athleteProfileId, updatedAt",
+      bodyMeasurements: "bodyMeasurementId, measurementDate, updatedAt",
+      exerciseDefinitions:
+        "exerciseDefinitionId, name, category, origin, muscleGroup, equipment",
+      trainingSessions: "trainingSessionId, sessionDate, status, updatedAt",
+      trainingBlocks:
+        "trainingBlockId, trainingSessionId, type, [trainingSessionId+position]",
+      exerciseMovements:
+        "exerciseMovementId, trainingBlockId, exerciseDefinitionId, [trainingBlockId+position]",
+      setRecords:
+        "setRecordId, exerciseMovementId, [exerciseMovementId+position]",
+      applicationMetadata: "key",
+    });
+    await legacy.table("trainingSessions").add({
+      trainingSessionId: "session-1",
+      sessionDate: "2026-08-01",
+      status: "completed",
+      createdAt: "2026-08-01T10:00:00.000Z",
+      updatedAt: "2026-08-01T10:00:00.000Z",
+    });
+    legacy.close();
+
+    const upgraded = new HormeDatabase(name);
+    await upgraded.open();
+    expect(upgraded.verno).toBeGreaterThanOrEqual(6);
+    expect(await upgraded.trainingSessions.count()).toBe(1);
+    expect(await upgraded.knownLifts.count()).toBe(0);
+    await upgraded.knownLifts.add({
+      knownLiftId: "lift-1",
+      exerciseDefinitionId: "built-in-003",
+      weightKilograms: 100,
+      repetitions: 5,
+      createdAt: "2026-08-01T10:00:00.000Z",
+      updatedAt: "2026-08-01T10:00:00.000Z",
+    });
+    expect(
+      await upgraded.knownLifts
+        .where("exerciseDefinitionId")
+        .equals("built-in-003")
+        .count(),
+    ).toBe(1);
+    upgraded.close();
+    await Dexie.delete(name);
+  });
 });

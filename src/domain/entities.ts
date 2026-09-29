@@ -148,6 +148,21 @@ export interface SetRecord {
   updatedAt: IsoTimestamp;
 }
 
+/**
+ * Marca que el usuario ya conocía antes de usar la app (p. ej. 100 kg × 5).
+ * Sin fecha cuando no la recuerda.
+ */
+export interface KnownLift {
+  knownLiftId: string;
+  exerciseDefinitionId: string;
+  weightKilograms: number;
+  repetitions: number;
+  recordDate?: LocalDate;
+  notes?: string;
+  createdAt: IsoTimestamp;
+  updatedAt: IsoTimestamp;
+}
+
 export interface ApplicationMetadata {
   key: "lastBackupAt" | "sessionCountAtLastBackup";
   value: string;

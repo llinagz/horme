@@ -21,6 +21,8 @@ async function renderPicker() {
 }
 
 const option = (name: RegExp) => screen.queryByRole("button", { name });
+const onlyKettlebell = (exercise: ExerciseDefinition) =>
+  exercise.equipment === "kettlebell";
 
 describe("selector de ejercicios", () => {
   it("agrupa los ejercicios por grupo muscular principal", async () => {
@@ -103,6 +105,26 @@ describe("selector de ejercicios", () => {
       secondaryMuscleGroups: ["isquios"],
       equipment: "barra",
     });
+  });
+
+  it("solo ofrece los ejercicios que pasan el filtro", async () => {
+    const user = userEvent.setup();
+    render(
+      <ExercisePicker
+        open
+        onClose={() => {}}
+        onPick={() => {}}
+        filter={onlyKettlebell}
+      />,
+    );
+    await screen.findByRole("button", { name: /^Swing con kettlebell/ });
+
+    expect(option(/^Swing con kettlebell/)).toBeTruthy();
+    expect(option(/^Press de banca con barra/)).toBeNull();
+    expect(screen.queryByRole("radio", { name: "Barra" })).toBeNull();
+
+    await user.type(screen.getByRole("searchbox"), "banca");
+    expect(option(/^Press de banca con barra/)).toBeNull();
   });
 
   it("no deja elegir como secundario el grupo principal", async () => {

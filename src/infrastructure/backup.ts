@@ -5,6 +5,7 @@ import type {
   BodyMeasurement,
   ExerciseDefinition,
   ExerciseMovement,
+  KnownLift,
   SetRecord,
   TrainingBlock,
   TrainingSession,
@@ -14,6 +15,7 @@ import {
   bodyMeasurementSchema,
   exerciseDefinitionSchema,
   exerciseMovementSchema,
+  knownLiftSchema,
   legacyExerciseDefinitionSchema,
   setRecordSchema,
   trainingBlockSchema,
@@ -22,10 +24,11 @@ import {
 import { database, initializeDatabase, seedBuiltInExercises } from "./database";
 import { applyCatalogMetadata } from "./exercise-catalog";
 
-function backupSchemaFor<Version extends 1 | 2, Exercise extends z.ZodType>(
-  schemaVersion: Version,
-  exerciseSchema: Exercise,
-) {
+function backupSchemaFor<
+  Version extends 1 | 2 | 3,
+  Exercise extends z.ZodType,
+  Extra extends z.ZodRawShape,
+>(schemaVersion: Version, exerciseSchema: Exercise, extraCollections: Extra) {
   return z.strictObject({
     format: z.literal("horme-backup"),
     schemaVersion: z.literal(schemaVersion),
@@ -38,17 +41,26 @@ function backupSchemaFor<Version extends 1 | 2, Exercise extends z.ZodType>(
       trainingBlocks: z.array(trainingBlockSchema),
       exerciseMovements: z.array(exerciseMovementSchema),
       setRecords: z.array(setRecordSchema),
+      ...extraCollections,
     }),
   });
 }
 
-export const backupSchema = backupSchemaFor(2, exerciseDefinitionSchema);
+export const backupSchema = backupSchemaFor(3, exerciseDefinitionSchema, {
+  knownLifts: z.array(knownLiftSchema),
+});
+/** Copias v2, anteriores a las marcas registradas. */
+const backupV2Schema = backupSchemaFor(2, exerciseDefinitionSchema, {});
 /** Copias v1, anteriores a los grupos musculares; se migran al importarlas. */
-const legacyBackupSchema = backupSchemaFor(1, legacyExerciseDefinitionSchema);
+const legacyBackupSchema = backupSchemaFor(
+  1,
+  legacyExerciseDefinitionSchema,
+  {},
+);
 
 export interface HormeBackup {
   format: "horme-backup";
-  schemaVersion: 2;
+  schemaVersion: 3;
   exportedAt: string;
   collections: {
     athleteProfiles: AthleteProfile[];
@@ -58,6 +70,7 @@ export interface HormeBackup {
     trainingBlocks: TrainingBlock[];
     exerciseMovements: ExerciseMovement[];
     setRecords: SetRecord[];
+    knownLifts: KnownLift[];
   };
 }
 
@@ -65,6 +78,7 @@ export interface BackupPreview {
   displayName?: string;
   sessionCount: number;
   measurementCount: number;
+  knownLiftCount: number;
   firstSessionDate?: string;
   lastSessionDate?: string;
   exportedAt: string;
@@ -107,6 +121,10 @@ function validateReferences(backup: HormeBackup): void {
     collections.setRecords.map((item) => item.setRecordId),
     "series",
   );
+  assertUnique(
+    collections.knownLifts.map((item) => item.knownLiftId),
+    "marcas",
+  );
 
   const sessionIds = new Set(
     collections.trainingSessions.map((item) => item.trainingSessionId),
@@ -141,21 +159,33 @@ function validateReferences(backup: HormeBackup): void {
     )
   )
     throw new Error("Hay series sin un movimiento válido");
+  if (
+    collections.knownLifts.some(
+      (item) => !exerciseIds.has(item.exerciseDefinitionId),
+    )
+  )
+    throw new Error("Hay marcas sin un ejercicio válido");
 }
 
-function isLegacyBackup(value: unknown): boolean {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    "schemaVersion" in value &&
-    value.schemaVersion === 1
-  );
+function schemaVersionOf(value: unknown): unknown {
+  return typeof value === "object" && value !== null && "schemaVersion" in value
+    ? value.schemaVersion
+    : undefined;
+}
+
+function upgradeV2Backup(old: z.infer<typeof backupV2Schema>): HormeBackup {
+  const upgraded = {
+    ...old,
+    schemaVersion: 3,
+    collections: { ...old.collections, knownLifts: [] },
+  };
+  return upgraded as HormeBackup;
 }
 
 function upgradeLegacyBackup(
   legacy: z.infer<typeof legacyBackupSchema>,
 ): HormeBackup {
-  const upgraded = {
+  return upgradeV2Backup({
     ...legacy,
     schemaVersion: 2,
     collections: {
@@ -163,16 +193,19 @@ function upgradeLegacyBackup(
       exerciseDefinitions:
         legacy.collections.exerciseDefinitions.map(applyCatalogMetadata),
     },
-  };
-  return upgraded as HormeBackup;
+  } as z.infer<typeof backupV2Schema>);
 }
 
 export function parseBackup(value: unknown): HormeBackup {
   // Con `exactOptionalPropertyTypes` Zod infiere `campo?: T | undefined`; el
   // esquema estricto garantiza que la forma coincide con las entidades.
-  const backup = isLegacyBackup(value)
-    ? upgradeLegacyBackup(legacyBackupSchema.parse(value))
-    : (backupSchema.parse(value) as HormeBackup);
+  const version = schemaVersionOf(value);
+  const backup =
+    version === 1
+      ? upgradeLegacyBackup(legacyBackupSchema.parse(value))
+      : version === 2
+        ? upgradeV2Backup(backupV2Schema.parse(value))
+        : (backupSchema.parse(value) as HormeBackup);
   validateReferences(backup);
   return backup;
 }
@@ -190,6 +223,7 @@ export function previewBackup(value: unknown): BackupPreview {
       : {}),
     sessionCount: backup.collections.trainingSessions.length,
     measurementCount: backup.collections.bodyMeasurements.length,
+    knownLiftCount: backup.collections.knownLifts.length,
     ...(firstSessionDate !== undefined ? { firstSessionDate } : {}),
     ...(lastSessionDate !== undefined ? { lastSessionDate } : {}),
     exportedAt: backup.exportedAt,
@@ -204,7 +238,7 @@ export async function createBackup(): Promise<HormeBackup> {
   await initializeDatabase();
   const backup = await database.transaction("r", database.tables, async () => ({
     format: "horme-backup" as const,
-    schemaVersion: 2 as const,
+    schemaVersion: 3 as const,
     exportedAt: new Date().toISOString(),
     collections: {
       athleteProfiles: await database.athleteProfiles.toArray(),
@@ -214,6 +248,7 @@ export async function createBackup(): Promise<HormeBackup> {
       trainingBlocks: await database.trainingBlocks.toArray(),
       exerciseMovements: await database.exerciseMovements.toArray(),
       setRecords: await database.setRecords.toArray(),
+      knownLifts: await database.knownLifts.toArray(),
     },
   }));
   parseBackup(backup);
@@ -233,6 +268,7 @@ export async function replaceDatabaseFromBackup(value: unknown): Promise<void> {
     await database.trainingBlocks.bulkAdd(collections.trainingBlocks);
     await database.exerciseMovements.bulkAdd(collections.exerciseMovements);
     await database.setRecords.bulkAdd(collections.setRecords);
+    await database.knownLifts.bulkAdd(collections.knownLifts);
   });
   // Una copia antigua no trae los ejercicios que el catálogo añadió después.
   await seedBuiltInExercises();

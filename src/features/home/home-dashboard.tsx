@@ -133,7 +133,11 @@ export function HomeDashboard() {
               >
                 <div>
                   <strong>{record.exercise.name}</strong>
-                  <p>Último día, {formatShortDate(record.latestSessionDate)}</p>
+                  <p>
+                    {record.latestSessionDate
+                      ? `Último día, ${formatShortDate(record.latestSessionDate)}`
+                      : "Marca registrada"}
+                  </p>
                 </div>
                 <Figure
                   className="record"

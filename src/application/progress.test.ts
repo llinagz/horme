@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { database } from "@/infrastructure/database";
+import { knownLiftRepository } from "@/infrastructure/repositories/known-lift-repository";
 import { trainingSessionRepository } from "@/infrastructure/repositories/training-session-repository";
 import {
   addTestExercise,
@@ -24,6 +25,99 @@ async function completeAllSets(movementId: string): Promise<void> {
       isCompleted: true,
     });
 }
+
+describe("progreso con marcas registradas", () => {
+  it("muestra un ejercicio que solo tiene marcas, sin volumen ni series", async () => {
+    await knownLiftRepository.create({
+      exerciseDefinitionId: "test-deadlift",
+      weightKilograms: 100,
+      repetitions: 5,
+    });
+
+    const [item] = await listExerciseProgress();
+    expect(item).toMatchObject({
+      maximumActualWeightKilograms: 100,
+      totalVolumeKilograms: 0,
+      completedSetCount: 0,
+      knownLiftCount: 1,
+      latestSessionDate: "",
+    });
+    expect(item?.estimatedOneRepMaxKilograms).toBeCloseTo(116.67, 2);
+  });
+
+  it("combina marcas y sesiones y toma la fecha más reciente", async () => {
+    const session = await createStrengthSession({
+      sessionDate: "2026-08-01",
+      setCount: 1,
+      repetitions: 5,
+      weightKilograms: 90,
+    });
+    await completeAllSets(session.movementId);
+    await knownLiftRepository.create({
+      exerciseDefinitionId: "test-deadlift",
+      weightKilograms: 140,
+      repetitions: 1,
+      recordDate: "2026-09-01",
+    });
+
+    const [item] = await listExerciseProgress();
+    expect(item).toMatchObject({
+      maximumActualWeightKilograms: 140,
+      estimatedOneRepMaxKilograms: 140,
+      totalVolumeKilograms: 450,
+      completedSetCount: 1,
+      latestSessionDate: "2026-09-01",
+    });
+  });
+
+  it("solo las marcas con fecha entran en la gráfica y no suman volumen", async () => {
+    await knownLiftRepository.create({
+      exerciseDefinitionId: "test-deadlift",
+      weightKilograms: 100,
+      repetitions: 5,
+      recordDate: "2026-07-01",
+    });
+    await knownLiftRepository.create({
+      exerciseDefinitionId: "test-deadlift",
+      weightKilograms: 120,
+      repetitions: 1,
+    });
+
+    const points = getExerciseProgressPoints(
+      [],
+      await knownLiftRepository.listByExercise("test-deadlift"),
+    );
+    expect(points).toMatchObject([
+      { date: "2026-07-01", volumeKilograms: 0, maximumWeightKilograms: 100 },
+    ]);
+  });
+
+  it("une en un punto la sesión y la marca del mismo día", async () => {
+    const session = await createStrengthSession({
+      sessionDate: "2026-08-01",
+      setCount: 1,
+      repetitions: 5,
+      weightKilograms: 90,
+    });
+    await completeAllSets(session.movementId);
+    await knownLiftRepository.create({
+      exerciseDefinitionId: "test-deadlift",
+      weightKilograms: 100,
+      repetitions: 3,
+      recordDate: "2026-08-01",
+    });
+
+    const points = getExerciseProgressPoints(
+      await trainingSessionRepository.listExerciseHistory("test-deadlift"),
+      await knownLiftRepository.listByExercise("test-deadlift"),
+    );
+    expect(points).toHaveLength(1);
+    expect(points[0]).toMatchObject({
+      volumeKilograms: 450,
+      maximumWeightKilograms: 100,
+    });
+  });
+});
 
 describe("progreso por ejercicio", () => {
   it("resume cada ejercicio y ordena por la sesión más reciente", async () => {

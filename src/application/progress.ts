@@ -1,8 +1,16 @@
 import {
+  calculateEstimatedOneRepMax,
   calculateSessionVolume,
+  mergeKnownLifts,
   summarizeExercisePerformance,
 } from "@/domain/calculations";
-import type { ExerciseDefinition, SetRecord } from "@/domain/entities";
+import type {
+  ExerciseDefinition,
+  KnownLift,
+  SetRecord,
+} from "@/domain/entities";
+import { exerciseDefinitionRepository } from "@/infrastructure/repositories/exercise-definition-repository";
+import { knownLiftRepository } from "@/infrastructure/repositories/known-lift-repository";
 import {
   trainingSessionRepository,
   type ExerciseHistoryEntry,
@@ -14,6 +22,8 @@ export interface ExerciseProgressSummary {
   estimatedOneRepMaxKilograms?: number;
   totalVolumeKilograms: number;
   completedSetCount: number;
+  knownLiftCount: number;
+  /** Última sesión o marca con fecha; vacío si no hay ninguna. */
   latestSessionDate: string;
 }
 
@@ -45,17 +55,37 @@ export function getRecordedSets(history: ExerciseHistoryEntry[]): SetRecord[] {
 export async function listExerciseProgress(): Promise<
   ExerciseProgressSummary[]
 > {
-  const [definitions, histories] = await Promise.all([
+  const [withHistory, histories, liftsByExercise] = await Promise.all([
     trainingSessionRepository.listExerciseDefinitionsWithHistory(),
     trainingSessionRepository.listAllExerciseHistories(),
+    knownLiftRepository.listAll(),
   ]);
-  return definitions
+  // Un ejercicio con solo marcas registradas también tiene ficha y progreso.
+  const known = new Set(withHistory.map((item) => item.exerciseDefinitionId));
+  const liftOnly = (
+    await Promise.all(
+      [...liftsByExercise.keys()]
+        .filter((id) => !known.has(id))
+        .map((id) => exerciseDefinitionRepository.get(id)),
+    )
+  ).filter((item): item is ExerciseDefinition => item !== undefined);
+  return [...withHistory, ...liftOnly]
     .map((exercise) => {
       const history = histories.get(exercise.exerciseDefinitionId) ?? [];
+      const lifts = liftsByExercise.get(exercise.exerciseDefinitionId) ?? [];
+      const latestLiftDate = lifts.find((lift) => lift.recordDate)?.recordDate;
       return {
         exercise,
-        ...summarizeExercisePerformance(getRecordedSets(history)),
-        latestSessionDate: history[0]?.session.sessionDate ?? "",
+        ...mergeKnownLifts(
+          summarizeExercisePerformance(getRecordedSets(history)),
+          lifts,
+        ),
+        knownLiftCount: lifts.length,
+        latestSessionDate:
+          [history[0]?.session.sessionDate, latestLiftDate]
+            .filter((date): date is string => date !== undefined)
+            .toSorted()
+            .at(-1) ?? "",
       };
     })
     .toSorted((left, right) =>
@@ -70,26 +100,82 @@ export interface ExerciseProgressPoint {
   maximumWeightKilograms?: number;
 }
 
-/** Un punto por sesión, en orden cronológico, para las gráficas. */
+/**
+ * Un punto por día con datos, en orden cronológico, para las gráficas. Las
+ * marcas registradas con fecha aportan carga y 1RM pero no volumen; las que no
+ * tienen fecha no salen porque no se pueden situar en el tiempo.
+ */
 export function getExerciseProgressPoints(
   history: ExerciseHistoryEntry[],
+  lifts: KnownLift[] = [],
 ): ExerciseProgressPoint[] {
-  return history
-    .map((entry) => {
-      const completedSets = getRecordedSets([entry]);
-      const summary = summarizeExercisePerformance(completedSets);
-      return {
-        date: entry.session.sessionDate,
-        volumeKilograms: calculateSessionVolume(completedSets),
-        ...(summary.estimatedOneRepMaxKilograms !== undefined
-          ? { estimatedOneRepMaxKilograms: summary.estimatedOneRepMaxKilograms }
-          : {}),
-        ...(summary.maximumActualWeightKilograms !== undefined
-          ? { maximumWeightKilograms: summary.maximumActualWeightKilograms }
-          : {}),
-      };
-    })
-    .toSorted((left, right) => left.date.localeCompare(right.date));
+  const points = new Map<string, ExerciseProgressPoint>();
+  const add = (point: ExerciseProgressPoint) => {
+    const current = points.get(point.date);
+    if (!current) {
+      points.set(point.date, point);
+      return;
+    }
+    const maximumWeightKilograms = maxDefined(
+      current.maximumWeightKilograms,
+      point.maximumWeightKilograms,
+    );
+    const estimatedOneRepMaxKilograms = maxDefined(
+      current.estimatedOneRepMaxKilograms,
+      point.estimatedOneRepMaxKilograms,
+    );
+    points.set(point.date, {
+      date: point.date,
+      volumeKilograms: current.volumeKilograms + point.volumeKilograms,
+      ...(estimatedOneRepMaxKilograms !== undefined
+        ? { estimatedOneRepMaxKilograms }
+        : {}),
+      ...(maximumWeightKilograms !== undefined
+        ? { maximumWeightKilograms }
+        : {}),
+    });
+  };
+  for (const entry of history) {
+    const completedSets = getRecordedSets([entry]);
+    const summary = summarizeExercisePerformance(completedSets);
+    add({
+      date: entry.session.sessionDate,
+      volumeKilograms: calculateSessionVolume(completedSets),
+      ...(summary.estimatedOneRepMaxKilograms !== undefined
+        ? { estimatedOneRepMaxKilograms: summary.estimatedOneRepMaxKilograms }
+        : {}),
+      ...(summary.maximumActualWeightKilograms !== undefined
+        ? { maximumWeightKilograms: summary.maximumActualWeightKilograms }
+        : {}),
+    });
+  }
+  for (const lift of lifts) {
+    if (lift.recordDate === undefined) continue;
+    const estimate = calculateEstimatedOneRepMax(
+      lift.repetitions,
+      lift.weightKilograms,
+    );
+    add({
+      date: lift.recordDate,
+      volumeKilograms: 0,
+      maximumWeightKilograms: lift.weightKilograms,
+      ...(estimate !== undefined
+        ? { estimatedOneRepMaxKilograms: estimate }
+        : {}),
+    });
+  }
+  return [...points.values()].toSorted((left, right) =>
+    left.date.localeCompare(right.date),
+  );
+}
+
+function maxDefined(
+  left: number | undefined,
+  right: number | undefined,
+): number | undefined {
+  if (left === undefined) return right;
+  if (right === undefined) return left;
+  return Math.max(left, right);
 }
 
 export function describeSet(setRecord: SetRecord): string {

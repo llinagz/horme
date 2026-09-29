@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { knownLiftRepository } from "@/infrastructure/repositories/known-lift-repository";
 import { trainingSessionRepository } from "@/infrastructure/repositories/training-session-repository";
 import {
   addTestExercise,
@@ -62,6 +63,59 @@ describe("añadir un ejercicio a la sesión", () => {
     const sets = await getSortedSets(movementId);
     expect(sets).toHaveLength(3);
     expect(sets[0]).not.toHaveProperty("weightKilograms");
+  });
+
+  it("sin historial precarga tres series con la marca registrada", async () => {
+    await knownLiftRepository.create({
+      exerciseDefinitionId: "test-deadlift",
+      weightKilograms: 100,
+      repetitions: 5,
+    });
+    const sessionId = await trainingSessionRepository.create("2026-09-28");
+    const blockId = await trainingSessionRepository.addBlock(
+      sessionId,
+      "strength",
+    );
+    const movementId = await addExerciseToBlock(
+      blockId,
+      "test-deadlift",
+      sessionId,
+    );
+
+    expect(await getSortedSets(movementId)).toMatchObject([
+      { repetitions: 5, weightKilograms: 100, isCompleted: false },
+      { repetitions: 5, weightKilograms: 100, isCompleted: false },
+      { repetitions: 5, weightKilograms: 100, isCompleted: false },
+    ]);
+  });
+
+  it("el historial de sesiones tiene prioridad sobre la marca registrada", async () => {
+    await knownLiftRepository.create({
+      exerciseDefinitionId: "test-deadlift",
+      weightKilograms: 100,
+      repetitions: 5,
+    });
+    const previous = await createStrengthSession({
+      sessionDate: "2026-09-14",
+      setCount: 1,
+      repetitions: 3,
+      weightKilograms: 130,
+    });
+    const sessionId = await trainingSessionRepository.create("2026-09-28");
+    const blockId = await trainingSessionRepository.addBlock(
+      sessionId,
+      "strength",
+    );
+    const movementId = await addExerciseToBlock(
+      blockId,
+      "test-deadlift",
+      sessionId,
+    );
+
+    expect(previous.movementId).not.toBe(movementId);
+    expect(await getSortedSets(movementId)).toMatchObject([
+      { repetitions: 3, weightKilograms: 130 },
+    ]);
   });
 });
 
